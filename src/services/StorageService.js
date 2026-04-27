@@ -99,7 +99,7 @@ class StorageService {
       const newSession = {
         ...session,
         id: Date.now().toString(),
-        completedAt: new Date().toISOString(),
+        completedAt: session.completedAt ?? new Date().toISOString(),
       };
       history.push(newSession);
       await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
@@ -117,6 +117,22 @@ class StorageService {
     } catch (error) {
       console.error('Error loading workout history:', error);
       return [];
+    }
+  }
+
+  async updateWorkoutSession(id, updates) {
+    try {
+      const history = await this.getWorkoutHistory();
+      const index = history.findIndex(s => s.id === id);
+      if (index !== -1) {
+        history[index] = { ...history[index], ...updates };
+        await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
+        return history[index];
+      }
+      return null;
+    } catch (error) {
+      console.error('Error updating workout session:', error);
+      return null;
     }
   }
 
