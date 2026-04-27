@@ -7,271 +7,120 @@ const ProfileScreen = () => {
   const { colors, currentTheme, changeTheme, availableThemes } = useTheme();
   const [showThemeModal, setShowThemeModal] = useState(false);
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-      paddingTop: 50,
-    },
-    title: {
-      fontSize: 28,
-      fontWeight: 'bold',
-      color: colors.text,
-      paddingHorizontal: 20,
-      marginBottom: 20,
-    },
-    profileCard: {
-      backgroundColor: colors.cardBackground,
-      margin: 20,
-      padding: 20,
-      borderRadius: 15,
-      alignItems: 'center',
-      shadowColor: colors.black,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: colors.borderColor,
-    },
-    avatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: colors.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 10,
-    },
-    avatarText: {
-      color: colors.white,
-      fontSize: 32,
-      fontWeight: 'bold',
-    },
-    name: {
-      fontSize: 22,
-      fontWeight: '600',
-      color: colors.text,
-      marginBottom: 5,
-    },
-    email: {
-      fontSize: 16,
-      color: colors.gray,
-    },
-    section: {
-      backgroundColor: colors.cardBackground,
-      marginHorizontal: 20,
-      marginBottom: 20,
-      borderRadius: 15,
-      padding: 15,
-      shadowColor: colors.black,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: colors.borderColor,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.text,
-      marginBottom: 15,
-      paddingHorizontal: 5,
-    },
-    settingItem: {
-      paddingVertical: 12,
-      paddingHorizontal: 5,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.borderColor,
-    },
-    settingItemContent: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    settingText: {
-      fontSize: 16,
-      color: colors.text,
-    },
-    themePreview: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    currentThemeText: {
-      fontSize: 14,
-      marginRight: 5,
-    },
-    logoutButton: {
-      backgroundColor: colors.error,
-      marginHorizontal: 20,
-      marginBottom: 40,
-      padding: 15,
-      borderRadius: 25,
-      alignItems: 'center',
-    },
-    logoutText: {
-      color: colors.white,
-      fontSize: 18,
-      fontWeight: '600',
-    },
-    modalOverlay: {
-      flex: 1,
-      justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.5)',
-    },
-    modalContent: {
-      borderTopLeftRadius: 25,
-      borderTopRightRadius: 25,
-      padding: 20,
-      maxHeight: '70%',
-      borderWidth: 1,
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 20,
-    },
-    modalTitle: {
-      fontSize: 22,
-      fontWeight: 'bold',
-    },
-    themeOption: {
-      padding: 15,
-      borderRadius: 12,
-      marginBottom: 12,
-      borderWidth: 1,
-    },
-    themeInfo: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 10,
-    },
-    themeName: {
-      fontSize: 18,
-      fontWeight: '500',
-    },
-    colorPreview: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    colorDot: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.2)',
-    },
-  });
+  const primarySettings = [
+    { icon: 'person-outline',  color: '#58D8DB', title: 'Edit Profile',    sub: 'Name, email, avatar',  onPress: null },
+    { icon: 'fitness-outline', color: '#6366F1', title: 'Goals & Targets', sub: '5 workouts/week',       onPress: null },
+    { icon: 'leaf-outline',    color: '#34D399', title: 'Notifications',   sub: 'Daily reminders on',   onPress: null },
+    { icon: 'body-outline',    color: '#FBBF24', title: 'Units',           sub: 'Metric (kg, km)',       onPress: null },
+    { icon: 'color-palette-outline', color: '#58D8DB', title: 'Theme',
+      sub: availableThemes.find(t => t.id === currentTheme)?.name || 'Ocean Blue',
+      onPress: () => setShowThemeModal(true) },
+  ];
+
+  const secondaryLinks = ['Privacy', 'Terms of Service', 'Help & Support'];
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
+    <ScrollView style={[s.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
-        </View>
-        <Text style={styles.name}>John Doe</Text>
-        <Text style={styles.email}>john.doe@example.com</Text>
+      {/* Header */}
+      <View style={s.header}>
+        <Text style={[s.headerTitle, { color: '#FFFFFF' }]}>Profile</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Settings</Text>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Notifications</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Units (Metric/Imperial)</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem} onPress={() => setShowThemeModal(true)}>
-          <View style={styles.settingItemContent}>
-            <Text style={styles.settingText}>Theme</Text>
-            <View style={styles.themePreview}>
-              <Text style={[styles.currentThemeText, { color: colors.gray }]}>
-                {availableThemes.find(t => t.id === currentTheme)?.name || 'Default'}
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color={colors.gray} />
-            </View>
+      {/* Hero card */}
+      <View style={[s.heroCard, { borderColor: 'rgba(88,216,219,0.2)' }]}>
+        <View style={s.heroTop}>
+          <View style={s.heroAvatar}>
+            <Text style={s.heroAvatarText}>JD</Text>
           </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Privacy</Text>
-        </TouchableOpacity>
+          <View style={s.heroInfo}>
+            <Text style={s.heroName}>John Doe</Text>
+            <Text style={[s.heroSince, { color: colors.gray }]}>Member since Jan 2024</Text>
+          </View>
+        </View>
+        <View style={[s.heroDivider, { borderColor: 'rgba(88,216,219,0.15)' }]} />
+        <View style={s.heroStats}>
+          {[
+            { l: 'Workouts', v: '234' },
+            { l: 'Streak',   v: '12' },
+            { l: 'PRs',      v: '18' },
+          ].map(stat => (
+            <View key={stat.l} style={s.heroStatItem}>
+              <Text style={s.heroStatValue}>{stat.v}</Text>
+              <Text style={[s.heroStatLabel, { color: colors.gray }]}>{stat.l.toUpperCase()}</Text>
+            </View>
+          ))}
+        </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Terms of Service</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Privacy Policy</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingItem}>
-          <Text style={styles.settingText}>Version 1.0.0</Text>
-        </TouchableOpacity>
+      {/* Primary settings */}
+      <View style={[s.settingsGroup, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
+        {primarySettings.map((item, idx) => (
+          <TouchableOpacity
+            key={item.title}
+            style={[s.settingRow, idx < primarySettings.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderColor }]}
+            onPress={item.onPress || undefined}
+            activeOpacity={item.onPress ? 0.7 : 1}
+          >
+            <View style={[s.iconChip, { backgroundColor: item.color + '22' }]}>
+              <Ionicons name={item.icon} size={18} color={item.color} />
+            </View>
+            <View style={s.settingText}>
+              <Text style={[s.settingTitle, { color: '#FFFFFF' }]}>{item.title}</Text>
+              <Text style={[s.settingSub, { color: colors.gray }]}>{item.sub}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.gray} />
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <TouchableOpacity style={styles.logoutButton}>
-        <Text style={styles.logoutText}>Sign Out</Text>
+      {/* Secondary links */}
+      <View style={[s.settingsGroup, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
+        {secondaryLinks.map((title, idx) => (
+          <TouchableOpacity
+            key={title}
+            style={[s.simpleRow, idx < secondaryLinks.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderColor }]}
+          >
+            <Text style={[s.simpleRowText, { color: '#FFFFFF' }]}>{title}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.gray} />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Sign out — ghost style */}
+      <TouchableOpacity style={[s.signOutBtn, { borderColor: colors.borderColor }]}>
+        <Text style={[s.signOutText, { color: colors.gray }]}>Sign out</Text>
       </TouchableOpacity>
 
-      {/* Theme Selector Modal */}
-      <Modal
-        visible={showThemeModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowThemeModal(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: colors.modalBackground }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>Select Theme</Text>
+      {/* Theme selector modal */}
+      <Modal visible={showThemeModal} transparent animationType="slide" onRequestClose={() => setShowThemeModal(false)}>
+        <View style={[s.modalOverlay, { backgroundColor: colors.modalBackground }]}>
+          <View style={[s.modalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: '#FFFFFF' }]}>Select Theme</Text>
               <TouchableOpacity onPress={() => setShowThemeModal(false)}>
                 <Ionicons name="close-circle" size={28} color={colors.gray} />
               </TouchableOpacity>
             </View>
-
             <ScrollView showsVerticalScrollIndicator={false}>
-              {availableThemes.map((theme) => (
+              {availableThemes.map(theme => (
                 <TouchableOpacity
                   key={theme.id}
                   style={[
-                    styles.themeOption,
+                    s.themeOption,
                     { backgroundColor: colors.background, borderColor: colors.borderColor },
-                    currentTheme === theme.id && { borderColor: colors.primary, borderWidth: 2 }
+                    currentTheme === theme.id && { borderColor: colors.primary, borderWidth: 2 },
                   ]}
-                  onPress={() => {
-                    changeTheme(theme.id);
-                    setShowThemeModal(false);
-                  }}
+                  onPress={() => { changeTheme(theme.id); setShowThemeModal(false); }}
                 >
-                  <View style={styles.themeInfo}>
-                    <Text style={[styles.themeName, { color: colors.text }]}>{theme.name}</Text>
-                    {currentTheme === theme.id && (
-                      <Ionicons name="checkmark-circle" size={24} color={colors.success} />
-                    )}
+                  <View style={s.themeOptionRow}>
+                    <Text style={[s.themeName, { color: '#FFFFFF' }]}>{theme.name}</Text>
+                    {currentTheme === theme.id && <Ionicons name="checkmark-circle" size={22} color={colors.success} />}
                   </View>
-
-                  <View style={styles.colorPreview}>
-                    <View style={[styles.colorDot, { backgroundColor: theme.preview.primary }]} />
-                    <View style={[styles.colorDot, { backgroundColor: theme.preview.text }]} />
-                    <View style={[styles.colorDot, { backgroundColor: theme.preview.background }]} />
-                    <View style={[styles.colorDot, { backgroundColor: theme.preview.cardBackground }]} />
+                  <View style={s.colorDots}>
+                    {[theme.preview.primary, theme.preview.text, theme.preview.background, theme.preview.cardBackground].map((c, i) => (
+                      <View key={i} style={[s.colorDot, { backgroundColor: c }]} />
+                    ))}
                   </View>
                 </TouchableOpacity>
               ))}
@@ -279,8 +128,76 @@ const ProfileScreen = () => {
           </View>
         </View>
       </Modal>
+
     </ScrollView>
   );
 };
+
+const s = StyleSheet.create({
+  container: { flex: 1 },
+
+  header: {
+    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 8,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '700' },
+
+  // Hero card
+  heroCard: {
+    marginHorizontal: 18, marginTop: 16, marginBottom: 14,
+    padding: 18, borderRadius: 20,
+    backgroundColor: 'rgba(88,216,219,0.08)',
+    borderWidth: 1,
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  heroAvatar: {
+    width: 64, height: 64, borderRadius: 999,
+    backgroundColor: '#283b89',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  heroAvatarText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  heroInfo: { flex: 1 },
+  heroName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
+  heroSince: { fontSize: 12, marginTop: 2 },
+  heroDivider: { borderTopWidth: 1, marginVertical: 14 },
+  heroStats: { flexDirection: 'row', justifyContent: 'space-around' },
+  heroStatItem: { alignItems: 'center' },
+  heroStatValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  heroStatLabel: { fontSize: 10, letterSpacing: 0.6, marginTop: 2 },
+
+  // Settings groups
+  settingsGroup: {
+    marginHorizontal: 18, marginBottom: 14,
+    borderRadius: 14, borderWidth: 1, overflow: 'hidden',
+  },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  iconChip: { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  settingText: { flex: 1 },
+  settingTitle: { fontSize: 14, fontWeight: '600' },
+  settingSub: { fontSize: 11, marginTop: 1 },
+
+  simpleRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+  simpleRowText: { flex: 1, fontSize: 14 },
+
+  // Sign out
+  signOutBtn: {
+    marginHorizontal: 18, padding: 14, borderRadius: 14,
+    borderWidth: 1, alignItems: 'center',
+  },
+  signOutText: { fontSize: 14, fontWeight: '600' },
+
+  // Theme modal
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalSheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, maxHeight: '72%', borderWidth: 1,
+  },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  modalTitle: { fontSize: 22, fontWeight: 'bold' },
+  themeOption: { padding: 15, borderRadius: 12, marginBottom: 12, borderWidth: 1 },
+  themeOptionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  themeName: { fontSize: 18, fontWeight: '500' },
+  colorDots: { flexDirection: 'row', gap: 8 },
+  colorDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+});
 
 export default ProfileScreen;

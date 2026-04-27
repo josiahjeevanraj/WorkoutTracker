@@ -27,6 +27,13 @@ export const Colors = {
   chartPrimary: '#283b89',
   chartSecondary: '#58d8db',
   chartAccent: '#10B981',
+
+  // Extended palette
+  indigo: '#6366F1',
+  green: '#34D399',
+  softRed: '#F87171',
+  amber: '#FBBF24',
+  textSecondary: '#B0BEC5',
 };
 
 export default Colors;
