@@ -1,27 +1,111 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Dimensions,
-  TouchableOpacity,
-  FlatList,
-  TextInput,
-  Modal
+  View, Text, StyleSheet, ScrollView, Dimensions,
+  TouchableOpacity, FlatList, TextInput, Modal,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
-import StorageService from '../services/StorageService';
+import Svg, {
+  Circle, Path, Defs, Stop,
+  LinearGradient as SvgGradient,
+} from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
-import Colors from '../constants/colors';
+import StorageService from '../services/StorageService';
+import { Colors } from '../constants/colors';
 
-const screenWidth = Dimensions.get('window').width;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CHART_W = SCREEN_WIDTH - 36;
 
+const BODY_METRICS = [
+  { id: 'weight',           label: 'Body Weight',   unit: 'kg',   color: Colors.text },
+  { id: 'caloriesBurned',   label: 'Cals Burned',   unit: 'kcal', color: Colors.softRed },
+  { id: 'caloriesConsumed', label: 'Cals Consumed', unit: 'kcal', color: Colors.amber },
+];
+
+const CARDIO_METRICS = [
+  { id: 'pace',     label: 'Pace',     unit: 'min/km', color: Colors.text },
+  { id: 'distance', label: 'Distance', unit: 'km',     color: Colors.indigo },
+];
+
+const EXERCISE_ICONS = {
+  Running:       { icon: 'walk-outline',    color: Colors.softRed },
+  Cycling:       { icon: 'bicycle-outline', color: Colors.amber },
+  Swimming:      { icon: 'water-outline',   color: Colors.indigo },
+  'Bench Press': { icon: 'barbell-outline', color: Colors.text },
+  Squats:        { icon: 'barbell-outline', color: Colors.green },
+  Deadlifts:     { icon: 'barbell-outline', color: Colors.indigo },
+};
+
+// ─── SVG line chart ───────────────────────────────────────────────────────────
+const LineChartSVG = ({ data, labels, color = Colors.text }) => {
+  const nonZero = (data || []).filter(v => v > 0);
+  if (!data || data.length < 2 || nonZero.length < 2) {
+    return (
+      <View style={styles.emptyChart}>
+        <Ionicons name="analytics-outline" size={28} color={Colors.gray} />
+        <Text style={styles.emptyChartText}>No data for this period</Text>
+      </View>
+    );
+  }
+  const VW = 300; const VH = 100; const PAD = 10;
+  const max = Math.max(...nonZero);
+  const minVal = Math.min(...nonZero);
+  const range = max - minVal || 1;
+  const w = VW - PAD * 2; const h = VH - PAD * 2;
+  const pts = data.map((v, i) => ({
+    x: PAD + (i / (data.length - 1)) * w,
+    y: v > 0 ? PAD + h - ((v - minVal) / range) * h : null,
+    v,
+  }));
+
+  const segments = [];
+  let seg = [];
+  pts.forEach(p => {
+    if (p.y !== null) {
+      seg.push(p);
+    } else if (seg.length > 0) {
+      segments.push(seg); seg = [];
+    }
+  });
+  if (seg.length > 0) segments.push(seg);
+
+  return (
+    <View>
+      <Svg width={CHART_W} height={110} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
+        <Defs>
+          <SvgGradient id="lgG" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={color} stopOpacity={0.3} />
+            <Stop offset="100%" stopColor={color} stopOpacity={0} />
+          </SvgGradient>
+        </Defs>
+        {segments.map((s, si) => {
+          const l = s.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+          const a = `${l} L ${s[s.length - 1].x.toFixed(1)} ${VH} L ${s[0].x.toFixed(1)} ${VH} Z`;
+          return (
+            <React.Fragment key={si}>
+              <Path d={a} fill="url(#lgG)" />
+              <Path d={l} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
+            </React.Fragment>
+          );
+        })}
+        {pts.filter(p => p.y !== null).map((p, i) => (
+          <Circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />
+        ))}
+      </Svg>
+      <View style={styles.chartLabels}>
+        {labels.map((l, i) => (
+          <Text key={i} style={styles.chartLabel}>{l}</Text>
+        ))}
+      </View>
+    </View>
+  );
+};
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
 const ProgressScreen = () => {
-  const [progressType, setProgressType] = useState('body'); // 'body' or 'exercise'
-  const [selectedMetric, setSelectedMetric] = useState('weight'); // weight, caloriesBurned, caloriesConsumed
-  const [cardioMetric, setCardioMetric] = useState('pace'); // pace or distance
-  const [timeView, setTimeView] = useState('week'); // week, month, year, allTime
+  const [progressType, setProgressType] = useState('body');
+  const [selectedMetric, setSelectedMetric] = useState('weight');
+  const [cardioMetric, setCardioMetric] = useState('pace');
+  const [timeView, setTimeView] = useState('week');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [currentMonthOffset, setCurrentMonthOffset] = useState(0);
   const [currentYearOffset, setCurrentYearOffset] = useState(0);
@@ -33,23 +117,20 @@ const ProgressScreen = () => {
   const [inputModalVisible, setInputModalVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
-  useEffect(() => {
-    loadProgressData();
-  }, []);
+  useEffect(() => { loadProgressData(); }, []);
 
   const loadProgressData = async () => {
     const progressData = await StorageService.getProgressData();
     if (progressData.bodyMetrics) {
       setBodyData(progressData.bodyMetrics);
     } else {
-      // Initialize with sample data
       const sampleData = generateSampleData();
       setBodyData(sampleData.bodyMetrics);
       setExerciseData(sampleData.exercises);
       setAvailableExercises(Object.keys(sampleData.exercises));
       await StorageService.saveProgressData({
         bodyMetrics: sampleData.bodyMetrics,
-        exercises: sampleData.exercises
+        exercises: sampleData.exercises,
       });
     }
   };
@@ -57,16 +138,8 @@ const ProgressScreen = () => {
   const generateSampleData = () => {
     const today = new Date();
     const bodyMetrics = [];
-    const exercises = {
-      'Running': [],
-      'Cycling': [],
-      'Swimming': [],
-      'Bench Press': [],
-      'Squats': [],
-      'Deadlifts': []
-    };
+    const exercises = { Running: [], Cycling: [], Swimming: [], 'Bench Press': [], Squats: [], Deadlifts: [] };
 
-    // Generate 30 days of body metrics data
     for (let i = 29; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
@@ -74,21 +147,19 @@ const ProgressScreen = () => {
         date: date.toISOString(),
         weight: 150 + Math.random() * 10,
         caloriesBurned: 300 + Math.random() * 200,
-        caloriesConsumed: 1800 + Math.random() * 400
+        caloriesConsumed: 1800 + Math.random() * 400,
       });
     }
 
-    // Generate exercise data
-    const cardioExercises = ['Running', 'Cycling', 'Swimming'];
-    cardioExercises.forEach(exercise => {
+    ['Running', 'Cycling', 'Swimming'].forEach(ex => {
       for (let i = 0; i < 10; i++) {
         const date = new Date(today);
         date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-        exercises[exercise].push({
+        exercises[ex].push({
           date: date.toISOString(),
           distance: (Math.random() * 10 + 1).toFixed(2),
           duration: Math.floor(Math.random() * 60 + 20),
-          pace: (Math.random() * 3 + 5).toFixed(2)
+          pace: (Math.random() * 3 + 5).toFixed(2),
         });
       }
     });
@@ -96,927 +167,760 @@ const ProgressScreen = () => {
     return { bodyMetrics, exercises };
   };
 
-  const getChartData = () => {
-    if (progressType === 'body') {
-      return getBodyChartData();
-    } else {
-      return getExerciseChartData();
-    }
-  };
-
   const getBodyChartData = () => {
     let filteredData = [];
     let labels = [];
-
     const now = new Date();
 
     switch (timeView) {
-      case 'week':
+      case 'week': {
         const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - (currentWeekOffset * 7));
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - currentWeekOffset * 7);
         labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
         for (let i = 0; i < 7; i++) {
-          const targetDate = new Date(weekStart);
-          targetDate.setDate(weekStart.getDate() + i);
-          const dayData = bodyData.find(d =>
-            new Date(d.date).toDateString() === targetDate.toDateString()
-          );
-          filteredData.push(dayData ? dayData[selectedMetric] : 0);
+          const target = new Date(weekStart);
+          target.setDate(weekStart.getDate() + i);
+          const d = bodyData.find(d => new Date(d.date).toDateString() === target.toDateString());
+          filteredData.push(d ? d[selectedMetric] : 0);
         }
         break;
-
-      case 'month':
+      }
+      case 'month': {
         const monthDate = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
         const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-
         for (let i = 1; i <= daysInMonth; i++) {
           if (i % 5 === 1) labels.push(i.toString());
-          const targetDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
-          const dayData = bodyData.find(d =>
-            new Date(d.date).toDateString() === targetDate.toDateString()
-          );
-          filteredData.push(dayData ? dayData[selectedMetric] : 0);
+          const target = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
+          const d = bodyData.find(d => new Date(d.date).toDateString() === target.toDateString());
+          filteredData.push(d ? d[selectedMetric] : 0);
         }
         break;
-
-      case 'year':
+      }
+      case 'year': {
         const year = now.getFullYear() - currentYearOffset;
         labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
         for (let month = 0; month < 12; month++) {
           const monthData = bodyData.filter(d => {
             const date = new Date(d.date);
             return date.getFullYear() === year && date.getMonth() === month;
           });
-          const avg = monthData.length > 0
-            ? monthData.reduce((sum, d) => sum + d[selectedMetric], 0) / monthData.length
-            : 0;
-          filteredData.push(avg);
+          filteredData.push(
+            monthData.length > 0
+              ? monthData.reduce((s, d) => s + d[selectedMetric], 0) / monthData.length
+              : 0
+          );
         }
         break;
-
-      case 'allTime':
-        // Show monthly averages for all time
+      }
+      case 'allTime': {
         const allMonths = {};
         bodyData.forEach(d => {
           const date = new Date(d.date);
           const key = `${date.getFullYear()}-${date.getMonth()}`;
-          if (!allMonths[key]) {
-            allMonths[key] = [];
-          }
+          if (!allMonths[key]) allMonths[key] = [];
           allMonths[key].push(d[selectedMetric]);
         });
-
         Object.keys(allMonths).sort().slice(-12).forEach(key => {
           const [year, month] = key.split('-');
           labels.push(`${month}/${year.slice(-2)}`);
-          const values = allMonths[key];
-          filteredData.push(values.reduce((a, b) => a + b, 0) / values.length);
+          const vals = allMonths[key];
+          filteredData.push(vals.reduce((a, b) => a + b, 0) / vals.length);
         });
         break;
+      }
     }
-
-    return {
-      labels,
-      datasets: [{
-        data: filteredData.length > 0 ? filteredData : [0],
-        strokeWidth: 2
-      }]
-    };
+    return { labels, data: filteredData };
   };
 
   const getExerciseChartData = () => {
-    if (!selectedExercise || !exerciseData[selectedExercise]) {
-      return {
-        labels: [],
-        datasets: [{ data: [0] }]
-      };
-    }
+    if (!selectedExercise || !exerciseData[selectedExercise]) return { labels: [], data: [] };
+    const isCardio = ['Running', 'Cycling', 'Swimming'].includes(selectedExercise);
+    if (!isCardio) return { labels: [], data: [] };
 
-    const cardioExercises = ['Running', 'Cycling', 'Swimming'];
-    if (!cardioExercises.includes(selectedExercise)) {
-      return {
-        labels: [],
-        datasets: [{ data: [0] }]
-      };
-    }
-
+    const sessions = exerciseData[selectedExercise] || [];
+    const now = new Date();
     let filteredData = [];
     let labels = [];
-    const exerciseSessions = exerciseData[selectedExercise] || [];
-    const now = new Date();
 
     switch (timeView) {
-      case 'week':
+      case 'week': {
         const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - (currentWeekOffset * 7));
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - currentWeekOffset * 7);
         labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
         for (let i = 0; i < 7; i++) {
-          const targetDate = new Date(weekStart);
-          targetDate.setDate(weekStart.getDate() + i);
-          const dayData = exerciseSessions.filter(d =>
-            new Date(d.date).toDateString() === targetDate.toDateString()
-          );
-
+          const target = new Date(weekStart);
+          target.setDate(weekStart.getDate() + i);
+          const dayData = sessions.filter(d => new Date(d.date).toDateString() === target.toDateString());
           if (dayData.length > 0) {
-            const avgValue = dayData.reduce((sum, d) => {
-              return sum + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance);
-            }, 0) / dayData.length;
-            filteredData.push(avgValue);
+            filteredData.push(
+              dayData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / dayData.length
+            );
           } else {
             filteredData.push(0);
           }
         }
         break;
-
-      case 'month':
+      }
+      case 'month': {
         const monthDate = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
-        const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
-
-        // Show weekly averages for month view
         for (let week = 0; week < 4; week++) {
-          labels.push(`Week ${week + 1}`);
-          const weekStart = new Date(monthDate);
-          weekStart.setDate(weekStart.getDate() + (week * 7));
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekStart.getDate() + 6);
-
-          const weekData = exerciseSessions.filter(d => {
-            const date = new Date(d.date);
-            return date >= weekStart && date <= weekEnd;
-          });
-
-          if (weekData.length > 0) {
-            const avgValue = weekData.reduce((sum, d) => {
-              return sum + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance);
-            }, 0) / weekData.length;
-            filteredData.push(avgValue);
-          } else {
-            filteredData.push(0);
-          }
+          labels.push(`W${week + 1}`);
+          const wStart = new Date(monthDate);
+          wStart.setDate(wStart.getDate() + week * 7);
+          const wEnd = new Date(wStart);
+          wEnd.setDate(wStart.getDate() + 6);
+          const weekData = sessions.filter(d => { const date = new Date(d.date); return date >= wStart && date <= wEnd; });
+          filteredData.push(
+            weekData.length > 0
+              ? weekData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / weekData.length
+              : 0
+          );
         }
         break;
-
-      case 'year':
+      }
+      case 'year': {
         const year = now.getFullYear() - currentYearOffset;
         labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
         for (let month = 0; month < 12; month++) {
-          const monthData = exerciseSessions.filter(d => {
+          const monthData = sessions.filter(d => {
             const date = new Date(d.date);
             return date.getFullYear() === year && date.getMonth() === month;
           });
-
-          if (monthData.length > 0) {
-            const avgValue = monthData.reduce((sum, d) => {
-              return sum + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance);
-            }, 0) / monthData.length;
-            filteredData.push(avgValue);
-          } else {
-            filteredData.push(0);
-          }
+          filteredData.push(
+            monthData.length > 0
+              ? monthData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / monthData.length
+              : 0
+          );
         }
         break;
-
-      case 'allTime':
-        // Show monthly averages for all time
+      }
+      case 'allTime': {
         const allMonths = {};
-        exerciseSessions.forEach(d => {
+        sessions.forEach(d => {
           const date = new Date(d.date);
           const key = `${date.getFullYear()}-${date.getMonth()}`;
-          if (!allMonths[key]) {
-            allMonths[key] = [];
-          }
+          if (!allMonths[key]) allMonths[key] = [];
           allMonths[key].push(parseFloat(cardioMetric === 'pace' ? d.pace : d.distance));
         });
-
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         Object.keys(allMonths).sort().slice(-12).forEach(key => {
           const [year, month] = key.split('-');
-          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          labels.push(`${monthNames[parseInt(month)]} ${year.slice(-2)}`);
-          const values = allMonths[key];
-          filteredData.push(values.reduce((a, b) => a + b, 0) / values.length);
+          labels.push(`${MONTHS[parseInt(month)]} ${year.slice(-2)}`);
+          const vals = allMonths[key];
+          filteredData.push(vals.reduce((a, b) => a + b, 0) / vals.length);
         });
         break;
+      }
     }
-
-    return {
-      labels: labels.length > 0 ? labels : ['No Data'],
-      datasets: [{
-        data: filteredData.length > 0 ? filteredData : [0],
-        strokeWidth: 2
-      }]
-    };
+    return { labels, data: filteredData };
   };
 
-  const getCurrentPeriodLabel = () => {
+  const getPeriodLabel = () => {
     const now = new Date();
-
     switch (timeView) {
-      case 'week':
-        const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - (currentWeekOffset * 7));
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        return `${weekStart.toLocaleDateString()} - ${weekEnd.toLocaleDateString()}`;
-
-      case 'month':
-        const monthDate = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
-        return monthDate.toLocaleDateString('default', { month: 'long', year: 'numeric' });
-
+      case 'week': {
+        const ws = new Date(now);
+        ws.setDate(ws.getDate() - ws.getDay() - currentWeekOffset * 7);
+        const we = new Date(ws);
+        we.setDate(ws.getDate() + 6);
+        const fmt = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${fmt(ws)} – ${fmt(we)}`;
+      }
+      case 'month': {
+        const m = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
+        return m.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      }
       case 'year':
-        return (now.getFullYear() - currentYearOffset).toString();
-
-      case 'allTime':
-        return 'All Time';
-
+        return String(now.getFullYear() - currentYearOffset);
       default:
-        return '';
+        return 'All Time';
     }
   };
 
-  const handleSwipe = (direction) => {
-    switch (timeView) {
-      case 'week':
-        setCurrentWeekOffset(prev => prev + direction);
-        break;
-      case 'month':
-        setCurrentMonthOffset(prev => prev + direction);
-        break;
-      case 'year':
-        setCurrentYearOffset(prev => prev + direction);
-        break;
-    }
+  const handleSwipe = dir => {
+    if (timeView === 'week') setCurrentWeekOffset(p => p + dir);
+    if (timeView === 'month') setCurrentMonthOffset(p => p + dir);
+    if (timeView === 'year') setCurrentYearOffset(p => p + dir);
   };
 
-  const renderExerciseItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.exerciseItem}
-      onPress={() => {
-        setSelectedExercise(item);
-        setExerciseModalVisible(false);
-      }}
-    >
-      <Text style={styles.exerciseItemText}>{item}</Text>
-    </TouchableOpacity>
+  const isAtPresent = (
+    (timeView === 'week' && currentWeekOffset === 0) ||
+    (timeView === 'month' && currentMonthOffset === 0) ||
+    (timeView === 'year' && currentYearOffset === 0)
   );
 
-  const renderCardioSession = ({ item }) => (
-    <View style={styles.cardioSession}>
-      <Text style={styles.sessionDate}>
-        {new Date(item.date).toLocaleDateString()}
-      </Text>
-      <View style={styles.sessionDetails}>
-        <View style={styles.sessionMetric}>
-          <Text style={styles.metricLabel}>Distance</Text>
-          <Text style={styles.metricValue}>{item.distance} km</Text>
-        </View>
-        <View style={styles.sessionMetric}>
-          <Text style={styles.metricLabel}>Duration</Text>
-          <Text style={styles.metricValue}>{item.duration} min</Text>
-        </View>
-        <View style={styles.sessionMetric}>
-          <Text style={styles.metricLabel}>Pace</Text>
-          <Text style={styles.metricValue}>{item.pace} min/km</Text>
-        </View>
-      </View>
-    </View>
-  );
+  const getBigNumber = data => {
+    const nonZero = data.filter(v => v > 0);
+    if (nonZero.length === 0) return null;
+    return nonZero[nonZero.length - 1];
+  };
 
-  const chartConfig = {
-    backgroundGradientFrom: Colors.cardBackground,
-    backgroundGradientTo: Colors.background,
-    decimalPlaces: 1,
-    color: (opacity = 1) => `rgba(88, 216, 219, ${opacity})`,
-    labelColor: (opacity = 1) => `rgba(88, 216, 219, ${opacity})`,
-    style: {
-      borderRadius: 16
-    },
-    propsForDots: {
-      r: '6',
-      strokeWidth: '2',
-      stroke: Colors.text
-    }
+  const getTrend = data => {
+    const nonZero = data.filter(v => v > 0);
+    if (nonZero.length < 2) return null;
+    const first = nonZero[0];
+    const last = nonZero[nonZero.length - 1];
+    const pct = ((last - first) / first) * 100;
+    return pct;
+  };
+
+  const CARDIO_EXERCISES = ['Running', 'Cycling', 'Swimming'];
+  const isCardio = selectedExercise && CARDIO_EXERCISES.includes(selectedExercise);
+
+  const bodyChart = getBodyChartData();
+  const exChart = getExerciseChartData();
+
+  const activeBodyMetric = BODY_METRICS.find(m => m.id === selectedMetric);
+  const activeCardioMetric = CARDIO_METRICS.find(m => m.id === cardioMetric);
+
+  const bodyBigNum = getBigNumber(bodyChart.data);
+  const bodyTrend = getTrend(bodyChart.data);
+  const exBigNum = getBigNumber(exChart.data);
+  const exTrend = getTrend(exChart.data);
+
+  const PERIOD_TABS = [
+    { id: 'week',    label: 'Week' },
+    { id: 'month',   label: 'Month' },
+    { id: 'year',    label: 'Year' },
+    { id: 'allTime', label: 'All' },
+  ];
+
+  const setView = id => {
+    setTimeView(id);
+    setCurrentWeekOffset(0);
+    setCurrentMonthOffset(0);
+    setCurrentYearOffset(0);
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Progress Tracking</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 36 }}>
 
-      {/* Progress Type Selector */}
-      <View style={styles.typeSelector}>
-        <TouchableOpacity
-          style={[styles.typeButton, progressType === 'body' && styles.typeButtonActive]}
-          onPress={() => setProgressType('body')}
-        >
-          <Text style={[styles.typeText, progressType === 'body' && styles.typeTextActive]}>
-            Body Metrics
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.typeButton, progressType === 'exercise' && styles.typeButtonActive]}
-          onPress={() => setProgressType('exercise')}
-        >
-          <Text style={[styles.typeText, progressType === 'exercise' && styles.typeTextActive]}>
-            Exercise Progress
-          </Text>
-        </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Progress</Text>
+        <View style={styles.typePill}>
+          {['body', 'exercise'].map((type, i) => (
+            <TouchableOpacity
+              key={type}
+              style={[styles.typePillBtn, progressType === type && styles.typePillBtnActive]}
+              onPress={() => setProgressType(type)}
+            >
+              <Text style={[styles.typePillText, progressType === type && styles.typePillTextActive]}>
+                {type === 'body' ? 'Body' : 'Exercise'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
-      {/* Body Metrics Section */}
+      {/* ── BODY METRICS ─────────────────────────────────────────────────── */}
       {progressType === 'body' && (
         <>
-          {/* Metric Selector */}
-          <View style={styles.metricSelector}>
-            <TouchableOpacity
-              style={[styles.metricButton, selectedMetric === 'weight' && styles.metricButtonActive]}
-              onPress={() => setSelectedMetric('weight')}
-            >
-              <Text style={[styles.metricText, selectedMetric === 'weight' && styles.metricTextActive]}>
-                Weight
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.metricButton, selectedMetric === 'caloriesBurned' && styles.metricButtonActive]}
-              onPress={() => setSelectedMetric('caloriesBurned')}
-            >
-              <Text style={[styles.metricText, selectedMetric === 'caloriesBurned' && styles.metricTextActive]}>
-                Calories Burned
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.metricButton, selectedMetric === 'caloriesConsumed' && styles.metricButtonActive]}
-              onPress={() => setSelectedMetric('caloriesConsumed')}
-            >
-              <Text style={[styles.metricText, selectedMetric === 'caloriesConsumed' && styles.metricTextActive]}>
-                Calories Consumed
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Time View Selector */}
-          <View style={styles.timeViewSelector}>
-            {['week', 'month', 'year', 'allTime'].map(view => (
+          {/* Metric pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.pillScroll}
+            contentContainerStyle={styles.pillScrollContent}
+          >
+            {BODY_METRICS.map(m => (
               <TouchableOpacity
-                key={view}
-                style={[styles.timeButton, timeView === view && styles.timeButtonActive]}
-                onPress={() => {
-                  setTimeView(view);
-                  setCurrentWeekOffset(0);
-                  setCurrentMonthOffset(0);
-                  setCurrentYearOffset(0);
-                }}
+                key={m.id}
+                style={[styles.metricPill, selectedMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
+                onPress={() => setSelectedMetric(m.id)}
               >
-                <Text style={[styles.timeText, timeView === view && styles.timeTextActive]}>
-                  {view === 'allTime' ? 'All' : view.charAt(0).toUpperCase() + view.slice(1)}
+                <Text style={[styles.metricPillText, selectedMetric === m.id && styles.metricPillTextActive]}>
+                  {m.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Period tabs */}
+          <View style={styles.periodSelector}>
+            {PERIOD_TABS.map(t => (
+              <TouchableOpacity
+                key={t.id}
+                style={[styles.periodBtn, timeView === t.id && styles.periodBtnActive]}
+                onPress={() => setView(t.id)}
+              >
+                <Text style={[styles.periodBtnText, timeView === t.id && styles.periodBtnTextActive]}>
+                  {t.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {/* Period Navigation */}
-          {timeView !== 'allTime' && (
-            <View style={styles.periodNav}>
-              <TouchableOpacity onPress={() => handleSwipe(1)}>
-                <Ionicons name="chevron-back" size={24} color="#007AFF" />
-              </TouchableOpacity>
-              <Text style={styles.periodLabel}>{getCurrentPeriodLabel()}</Text>
-              <TouchableOpacity
-                onPress={() => handleSwipe(-1)}
-                disabled={
-                  (timeView === 'week' && currentWeekOffset === 0) ||
-                  (timeView === 'month' && currentMonthOffset === 0) ||
-                  (timeView === 'year' && currentYearOffset === 0)
-                }
-              >
-                <Ionicons
-                  name="chevron-forward"
-                  size={24}
-                  color={
-                    ((timeView === 'week' && currentWeekOffset === 0) ||
-                    (timeView === 'month' && currentMonthOffset === 0) ||
-                    (timeView === 'year' && currentYearOffset === 0))
-                    ? '#ccc' : '#007AFF'
-                  }
-                />
-              </TouchableOpacity>
+          {/* Chart card */}
+          <View style={styles.chartCard}>
+            <View style={styles.chartCardTop}>
+              <View>
+                <Text style={styles.chartCardLabel}>{activeBodyMetric.label.toUpperCase()}</Text>
+                <View style={styles.chartCardValueRow}>
+                  {bodyBigNum !== null ? (
+                    <>
+                      <Text style={[styles.chartCardBigValue, { color: activeBodyMetric.color }]}>
+                        {bodyBigNum % 1 === 0 ? bodyBigNum : bodyBigNum.toFixed(1)}
+                      </Text>
+                      <Text style={styles.chartCardUnit}> {activeBodyMetric.unit}</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.chartCardNoData}>—</Text>
+                  )}
+                </View>
+              </View>
+              {bodyTrend !== null && (
+                <View style={[styles.trendBadge, { backgroundColor: bodyTrend >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
+                  <Ionicons
+                    name={bodyTrend >= 0 ? 'trending-up' : 'trending-down'}
+                    size={12}
+                    color={bodyTrend >= 0 ? Colors.green : Colors.softRed}
+                  />
+                  <Text style={[styles.trendText, { color: bodyTrend >= 0 ? Colors.green : Colors.softRed }]}>
+                    {' '}{bodyTrend >= 0 ? '+' : ''}{bodyTrend.toFixed(1)}%
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
 
-          {/* Chart */}
-          <View style={styles.chartContainer}>
-            <LineChart
-              data={getChartData()}
-              width={screenWidth - 40}
-              height={220}
-              chartConfig={chartConfig}
-              bezier
-              style={styles.chart}
+            {/* Period nav */}
+            {timeView !== 'allTime' && (
+              <View style={styles.periodNav}>
+                <TouchableOpacity onPress={() => handleSwipe(1)} style={styles.navBtn}>
+                  <Ionicons name="chevron-back" size={18} color={Colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
+                <TouchableOpacity
+                  onPress={() => handleSwipe(-1)}
+                  style={styles.navBtn}
+                  disabled={isAtPresent}
+                >
+                  <Ionicons name="chevron-forward" size={18} color={isAtPresent ? Colors.gray : Colors.text} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <LineChartSVG
+              data={bodyChart.data}
+              labels={bodyChart.labels}
+              color={activeBodyMetric.color}
             />
           </View>
 
-          {/* Add Data Button */}
-          <TouchableOpacity
-            style={styles.addDataButton}
-            onPress={() => setInputModalVisible(true)}
-          >
-            <Text style={styles.addDataButtonText}>+ Log Today's Data</Text>
+          {/* Log button */}
+          <TouchableOpacity style={styles.logBtn} onPress={() => setInputModalVisible(true)}>
+            <Ionicons name="add" size={18} color="#FFFFFF" />
+            <Text style={styles.logBtnText}>Log Today's Data</Text>
           </TouchableOpacity>
         </>
       )}
 
-      {/* Exercise Progress Section */}
+      {/* ── EXERCISE PROGRESS ────────────────────────────────────────────── */}
       {progressType === 'exercise' && (
         <>
-          <TouchableOpacity
-            style={styles.selectExerciseButton}
-            onPress={() => setExerciseModalVisible(true)}
-          >
-            <Text style={styles.selectExerciseText}>
-              {selectedExercise || 'Select Exercise'}
-            </Text>
-            <Ionicons name="chevron-down" size={20} color={Colors.primary} />
+          {/* Exercise picker */}
+          <TouchableOpacity style={styles.exercisePicker} onPress={() => setExerciseModalVisible(true)}>
+            <View style={styles.exercisePickerLeft}>
+              {selectedExercise ? (
+                <>
+                  <View style={[styles.exercisePickerIcon, { backgroundColor: `${(EXERCISE_ICONS[selectedExercise] || {}).color || Colors.text}20` }]}>
+                    <Ionicons
+                      name={(EXERCISE_ICONS[selectedExercise] || { icon: 'barbell-outline' }).icon}
+                      size={18}
+                      color={(EXERCISE_ICONS[selectedExercise] || { color: Colors.text }).color}
+                    />
+                  </View>
+                  <Text style={styles.exercisePickerText}>{selectedExercise}</Text>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.exercisePickerIcon, { backgroundColor: 'rgba(107,114,128,0.15)' }]}>
+                    <Ionicons name="search-outline" size={18} color={Colors.gray} />
+                  </View>
+                  <Text style={[styles.exercisePickerText, { color: Colors.gray }]}>Select an exercise</Text>
+                </>
+              )}
+            </View>
+            <Ionicons name="chevron-down" size={18} color={Colors.gray} />
           </TouchableOpacity>
 
-          {selectedExercise && ['Running', 'Cycling', 'Swimming'].includes(selectedExercise) && (
+          {selectedExercise && isCardio && (
             <>
-              {/* Cardio Metric Selector */}
-              <View style={styles.metricSelector}>
-                <TouchableOpacity
-                  style={[styles.metricButton, cardioMetric === 'pace' && styles.metricButtonActive]}
-                  onPress={() => setCardioMetric('pace')}
-                >
-                  <Text style={[styles.metricText, cardioMetric === 'pace' && styles.metricTextActive]}>
-                    Pace
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.metricButton, cardioMetric === 'distance' && styles.metricButtonActive]}
-                  onPress={() => setCardioMetric('distance')}
-                >
-                  <Text style={[styles.metricText, cardioMetric === 'distance' && styles.metricTextActive]}>
-                    Distance
-                  </Text>
-                </TouchableOpacity>
+              {/* Cardio metric pills */}
+              <View style={styles.pillScroll}>
+                <View style={[styles.pillScrollContent, { flexDirection: 'row', gap: 10 }]}>
+                  {CARDIO_METRICS.map(m => (
+                    <TouchableOpacity
+                      key={m.id}
+                      style={[styles.metricPill, cardioMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
+                      onPress={() => setCardioMetric(m.id)}
+                    >
+                      <Text style={[styles.metricPillText, cardioMetric === m.id && styles.metricPillTextActive]}>
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
-              {/* Time View Selector */}
-              <View style={styles.timeViewSelector}>
-                {['week', 'month', 'year', 'allTime'].map(view => (
+              {/* Period tabs */}
+              <View style={styles.periodSelector}>
+                {PERIOD_TABS.map(t => (
                   <TouchableOpacity
-                    key={view}
-                    style={[styles.timeButton, timeView === view && styles.timeButtonActive]}
-                    onPress={() => {
-                      setTimeView(view);
-                      setCurrentWeekOffset(0);
-                      setCurrentMonthOffset(0);
-                      setCurrentYearOffset(0);
-                    }}
+                    key={t.id}
+                    style={[styles.periodBtn, timeView === t.id && styles.periodBtnActive]}
+                    onPress={() => setView(t.id)}
                   >
-                    <Text style={[styles.timeText, timeView === view && styles.timeTextActive]}>
-                      {view === 'allTime' ? 'All' : view.charAt(0).toUpperCase() + view.slice(1)}
+                    <Text style={[styles.periodBtnText, timeView === t.id && styles.periodBtnTextActive]}>
+                      {t.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              {/* Period Navigation */}
-              {timeView !== 'allTime' && (
-                <View style={styles.periodNav}>
-                  <TouchableOpacity onPress={() => handleSwipe(1)}>
-                    <Ionicons name="chevron-back" size={24} color={Colors.primary} />
-                  </TouchableOpacity>
-                  <Text style={styles.periodLabel}>{getCurrentPeriodLabel()}</Text>
-                  <TouchableOpacity
-                    onPress={() => handleSwipe(-1)}
-                    disabled={
-                      (timeView === 'week' && currentWeekOffset === 0) ||
-                      (timeView === 'month' && currentMonthOffset === 0) ||
-                      (timeView === 'year' && currentYearOffset === 0)
-                    }
-                  >
-                    <Ionicons
-                      name="chevron-forward"
-                      size={24}
-                      color={
-                        ((timeView === 'week' && currentWeekOffset === 0) ||
-                        (timeView === 'month' && currentMonthOffset === 0) ||
-                        (timeView === 'year' && currentYearOffset === 0))
-                        ? Colors.gray : Colors.primary
-                      }
-                    />
-                  </TouchableOpacity>
+              {/* Chart card */}
+              <View style={styles.chartCard}>
+                <View style={styles.chartCardTop}>
+                  <View>
+                    <Text style={styles.chartCardLabel}>{activeCardioMetric.label.toUpperCase()}</Text>
+                    <View style={styles.chartCardValueRow}>
+                      {exBigNum !== null ? (
+                        <>
+                          <Text style={[styles.chartCardBigValue, { color: activeCardioMetric.color }]}>
+                            {exBigNum.toFixed(2)}
+                          </Text>
+                          <Text style={styles.chartCardUnit}> {activeCardioMetric.unit}</Text>
+                        </>
+                      ) : (
+                        <Text style={styles.chartCardNoData}>—</Text>
+                      )}
+                    </View>
+                  </View>
+                  {exTrend !== null && (
+                    <View style={[styles.trendBadge, { backgroundColor: exTrend >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
+                      <Ionicons
+                        name={exTrend >= 0 ? 'trending-up' : 'trending-down'}
+                        size={12}
+                        color={exTrend >= 0 ? Colors.green : Colors.softRed}
+                      />
+                      <Text style={[styles.trendText, { color: exTrend >= 0 ? Colors.green : Colors.softRed }]}>
+                        {' '}{exTrend >= 0 ? '+' : ''}{exTrend.toFixed(1)}%
+                      </Text>
+                    </View>
+                  )}
                 </View>
-              )}
 
-              {/* Cardio Progress Chart */}
-              <View style={styles.chartContainer}>
-                <Text style={styles.chartTitle}>
-                  {cardioMetric === 'pace' ? 'Pace (min/km)' : 'Distance (km)'}
-                </Text>
-                <LineChart
-                  data={getExerciseChartData()}
-                  width={screenWidth - 40}
-                  height={220}
-                  chartConfig={{
-                    ...chartConfig,
-                    color: (opacity = 1) => cardioMetric === 'pace'
-                      ? `rgba(88, 216, 219, ${opacity})`
-                      : `rgba(40, 59, 137, ${opacity})`,
-                    propsForDots: {
-                      r: '6',
-                      strokeWidth: '2',
-                      stroke: cardioMetric === 'pace' ? Colors.text : Colors.primary
-                    }
-                  }}
-                  bezier
-                  style={styles.chart}
-                  yAxisLabel=""
-                  yAxisSuffix={cardioMetric === 'pace' ? '' : ' km'}
+                {timeView !== 'allTime' && (
+                  <View style={styles.periodNav}>
+                    <TouchableOpacity onPress={() => handleSwipe(1)} style={styles.navBtn}>
+                      <Ionicons name="chevron-back" size={18} color={Colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
+                    <TouchableOpacity
+                      onPress={() => handleSwipe(-1)}
+                      style={styles.navBtn}
+                      disabled={isAtPresent}
+                    >
+                      <Ionicons name="chevron-forward" size={18} color={isAtPresent ? Colors.gray : Colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                <LineChartSVG
+                  data={exChart.data}
+                  labels={exChart.labels}
+                  color={activeCardioMetric.color}
                 />
               </View>
 
-              {/* Recent Sessions */}
-              <Text style={styles.exerciseTitle}>Recent {selectedExercise} Sessions</Text>
-              <FlatList
-                data={(exerciseData[selectedExercise] || []).slice(0, 5)}
-                renderItem={renderCardioSession}
-                keyExtractor={(item, index) => index.toString()}
-                scrollEnabled={false}
-              />
+              {/* Recent sessions */}
+              <Text style={styles.sessionsTitle}>RECENT SESSIONS</Text>
+              {(exerciseData[selectedExercise] || [])
+                .slice()
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 5)
+                .map((item, idx) => (
+                  <View key={idx} style={[styles.sessionCard, { borderLeftColor: (EXERCISE_ICONS[selectedExercise] || { color: Colors.text }).color }]}>
+                    <Text style={styles.sessionDate}>{friendlyDate(item.date)}</Text>
+                    <View style={styles.sessionRow}>
+                      {[
+                        { l: 'Distance', v: `${item.distance} km` },
+                        { l: 'Duration', v: `${item.duration} min` },
+                        { l: 'Pace',     v: `${item.pace} min/km` },
+                      ].map(s => (
+                        <View key={s.l} style={styles.sessionStat}>
+                          <Text style={styles.sessionStatLabel}>{s.l}</Text>
+                          <Text style={styles.sessionStatValue}>{s.v}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
             </>
           )}
 
-          {selectedExercise && !['Running', 'Cycling', 'Swimming'].includes(selectedExercise) && (
-            <View style={styles.strengthContainer}>
-              <Text style={styles.strengthText}>Strength exercise tracking coming soon!</Text>
+          {selectedExercise && !isCardio && (
+            <View style={styles.emptyState}>
+              <Ionicons name="barbell-outline" size={36} color={Colors.gray} />
+              <Text style={styles.emptyStateTitle}>Strength Tracking</Text>
+              <Text style={styles.emptyStateText}>Coming soon — weight progression charts for {selectedExercise}.</Text>
+            </View>
+          )}
+
+          {!selectedExercise && (
+            <View style={styles.emptyState}>
+              <Ionicons name="analytics-outline" size={36} color={Colors.gray} />
+              <Text style={styles.emptyStateTitle}>Pick an exercise</Text>
+              <Text style={styles.emptyStateText}>Select an exercise above to view your progress over time.</Text>
             </View>
           )}
         </>
       )}
 
-      {/* Exercise Selection Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={exerciseModalVisible}
-        onRequestClose={() => setExerciseModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Exercise</Text>
-            <FlatList
-              data={availableExercises}
-              renderItem={renderExerciseItem}
-              keyExtractor={(item) => item}
-            />
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setExerciseModalVisible(false)}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </TouchableOpacity>
-          </View>
+      {/* ── EXERCISE PICKER MODAL ────────────────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={exerciseModalVisible} onRequestClose={() => setExerciseModalVisible(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setExerciseModalVisible(false)} />
+        <View style={styles.bottomSheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Select Exercise</Text>
+          <FlatList
+            data={availableExercises}
+            keyExtractor={item => item}
+            renderItem={({ item }) => {
+              const meta = EXERCISE_ICONS[item] || { icon: 'barbell-outline', color: Colors.text };
+              return (
+                <TouchableOpacity
+                  style={styles.sheetItem}
+                  onPress={() => { setSelectedExercise(item); setExerciseModalVisible(false); }}
+                >
+                  <View style={[styles.sheetItemIcon, { backgroundColor: `${meta.color}20` }]}>
+                    <Ionicons name={meta.icon} size={18} color={meta.color} />
+                  </View>
+                  <Text style={styles.sheetItemText}>{item}</Text>
+                  {selectedExercise === item && <Ionicons name="checkmark" size={18} color={Colors.text} />}
+                </TouchableOpacity>
+              );
+            }}
+          />
         </View>
       </Modal>
 
-      {/* Input Data Modal */}
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={inputModalVisible}
-        onRequestClose={() => setInputModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              Log {selectedMetric === 'weight' ? 'Weight' :
-                   selectedMetric === 'caloriesBurned' ? 'Calories Burned' :
-                   'Calories Consumed'}
+      {/* ── LOG DATA MODAL ───────────────────────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={inputModalVisible} onRequestClose={() => setInputModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => { setInputModalVisible(false); setInputValue(''); }} />
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>
+              Log {selectedMetric === 'weight' ? 'Weight' : selectedMetric === 'caloriesBurned' ? 'Calories Burned' : 'Calories Consumed'}
             </Text>
             <TextInput
               style={styles.input}
-              placeholder={`Enter ${selectedMetric}`}
+              placeholder={`Enter value in ${activeBodyMetric?.unit || ''}`}
+              placeholderTextColor={Colors.gray}
               value={inputValue}
               onChangeText={setInputValue}
               keyboardType="numeric"
+              autoFocus
             />
-            <View style={styles.modalButtons}>
+            <View style={styles.modalBtns}>
               <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setInputModalVisible(false);
-                  setInputValue('');
-                }}
+                style={styles.cancelBtn}
+                onPress={() => { setInputModalVisible(false); setInputValue(''); }}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButton, styles.saveButton]}
+                style={styles.saveBtn}
                 onPress={async () => {
-                  // Save the data
-                  const newEntry = {
-                    date: new Date().toISOString(),
-                    [selectedMetric]: parseFloat(inputValue)
-                  };
-                  const updatedData = [...bodyData, newEntry];
-                  setBodyData(updatedData);
-                  await StorageService.saveProgressData({ bodyMetrics: updatedData });
+                  const newEntry = { date: new Date().toISOString(), [selectedMetric]: parseFloat(inputValue) };
+                  const updated = [...bodyData, newEntry];
+                  setBodyData(updated);
+                  await StorageService.saveProgressData({ bodyMetrics: updated });
                   setInputModalVisible(false);
                   setInputValue('');
                 }}
               >
-                <Text style={[styles.buttonText, { color: 'white' }]}>Save</Text>
+                <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
+
     </ScrollView>
   );
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const friendlyDate = iso => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+};
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: 50,
+  container: { flex: 1, backgroundColor: Colors.background },
+
+  // Header
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: Colors.text,
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  typeSelector: {
+  headerTitle: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  typePill: {
     flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 15,
     backgroundColor: Colors.cardBackground,
-    borderRadius: 25,
-    padding: 4,
+    borderRadius: 12, padding: 3,
+    borderWidth: 1, borderColor: Colors.borderColor,
   },
-  typeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 20,
-  },
-  typeButtonActive: {
-    backgroundColor: Colors.primary,
-  },
-  typeText: {
-    fontSize: 15,
-    color: Colors.gray,
-  },
-  typeTextActive: {
-    color: Colors.white,
-    fontWeight: '600',
-  },
-  metricSelector: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 15,
-    gap: 10,
-  },
-  metricButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    borderRadius: 15,
+  typePillBtn: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 9 },
+  typePillBtnActive: { backgroundColor: Colors.background },
+  typePillText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
+  typePillTextActive: { color: '#FFFFFF' },
+
+  // Metric pills
+  pillScroll: { marginBottom: 12 },
+  pillScrollContent: { paddingHorizontal: 18, gap: 8 },
+  metricPill: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
     backgroundColor: Colors.cardBackground,
+    borderWidth: 1, borderColor: Colors.borderColor,
   },
-  metricButtonActive: {
-    backgroundColor: Colors.primary,
+  metricPillText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
+  metricPillTextActive: { color: '#FFFFFF' },
+
+  // Period tabs
+  periodSelector: {
+    flexDirection: 'row', marginHorizontal: 18, marginBottom: 14,
+    backgroundColor: Colors.cardBackground, borderRadius: 12, padding: 4,
+    borderWidth: 1, borderColor: Colors.borderColor,
   },
-  metricText: {
-    fontSize: 13,
-    color: Colors.gray,
-  },
-  metricTextActive: {
-    color: Colors.white,
-    fontWeight: '500',
-  },
-  timeViewSelector: {
-    flexDirection: 'row',
-    marginHorizontal: 20,
-    marginBottom: 15,
-    gap: 8,
-  },
-  timeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 12,
+  periodBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
+  periodBtnActive: { backgroundColor: Colors.background },
+  periodBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
+  periodBtnTextActive: { color: '#FFFFFF' },
+
+  // Chart card
+  chartCard: {
+    marginHorizontal: 18, marginBottom: 14, padding: 18,
     backgroundColor: Colors.cardBackground,
+    borderRadius: 18, borderWidth: 1, borderColor: Colors.borderColor,
   },
-  timeButtonActive: {
-    backgroundColor: Colors.text,
+  chartCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  chartCardLabel: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6 },
+  chartCardValueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
+  chartCardBigValue: { fontSize: 28, fontWeight: '800' },
+  chartCardUnit: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
+  chartCardNoData: { fontSize: 28, fontWeight: '800', color: Colors.gray },
+  trendBadge: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
-  timeText: {
-    fontSize: 14,
-    color: Colors.gray,
-  },
-  timeTextActive: {
-    color: Colors.background,
-    fontWeight: '500',
-  },
+  trendText: { fontSize: 12, fontWeight: '600' },
+
+  // Period nav
   periodNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 15,
-    paddingHorizontal: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  periodLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.text,
+  navBtn: { padding: 4 },
+  periodNavLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+
+  // Chart labels
+  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
+  chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
+
+  // Empty chart
+  emptyChart: { height: 110, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  emptyChartText: { fontSize: 13, color: Colors.gray },
+
+  // Log button
+  logBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 18, paddingVertical: 14, borderRadius: 14,
+    backgroundColor: Colors.primary, gap: 6,
   },
-  chartContainer: {
+  logBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  // Exercise picker
+  exercisePicker: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 18, marginBottom: 14, padding: 14,
+    backgroundColor: Colors.cardBackground, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  exercisePickerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  exercisePickerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  exercisePickerText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+
+  // Session cards
+  sessionsTitle: {
+    fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6,
+    marginHorizontal: 18, marginBottom: 10,
+  },
+  sessionCard: {
+    marginHorizontal: 18, marginBottom: 10, padding: 14,
+    backgroundColor: Colors.cardBackground, borderRadius: 14,
+    borderWidth: 1, borderColor: Colors.borderColor,
+    borderLeftWidth: 3,
+  },
+  sessionDate: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', marginBottom: 10 },
+  sessionRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  sessionStat: { alignItems: 'center' },
+  sessionStatLabel: { fontSize: 10, color: Colors.gray, fontWeight: '500', letterSpacing: 0.4, marginBottom: 3 },
+  sessionStatValue: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+
+  // Empty state
+  emptyState: {
+    marginHorizontal: 18, marginTop: 16, padding: 36,
+    backgroundColor: Colors.cardBackground, borderRadius: 18,
+    borderWidth: 1, borderColor: Colors.borderColor,
+    alignItems: 'center', gap: 10,
+  },
+  emptyStateTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  emptyStateText: { fontSize: 13, color: Colors.gray, textAlign: 'center', lineHeight: 20 },
+
+  // Modals
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  bottomSheet: {
     backgroundColor: Colors.cardBackground,
-    marginHorizontal: 20,
-    borderRadius: 15,
-    padding: 10,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  chart: {
-    borderRadius: 16,
-  },
-  addDataButton: {
-    backgroundColor: Colors.primary,
-    marginHorizontal: 20,
-    marginTop: 15,
-    padding: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-  },
-  addDataButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  selectExerciseButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    marginHorizontal: 20,
-    marginBottom: 15,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  selectExerciseText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-  exerciseTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginHorizontal: 20,
-    marginBottom: 15,
-    color: Colors.text,
-  },
-  cardioSession: {
-    backgroundColor: Colors.cardBackground,
-    marginHorizontal: 20,
-    marginBottom: 10,
-    padding: 15,
-    borderRadius: 12,
-    shadowColor: Colors.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sessionDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-    color: Colors.text,
-  },
-  sessionDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sessionMetric: {
-    alignItems: 'center',
-  },
-  metricLabel: {
-    fontSize: 12,
-    color: Colors.gray,
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.primary,
-  },
-  strengthContainer: {
-    backgroundColor: Colors.cardBackground,
-    marginHorizontal: 20,
-    padding: 30,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  strengthText: {
-    fontSize: 16,
-    color: Colors.gray,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.modalBackground,
-  },
-  modalContent: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 20,
-    padding: 20,
-    width: '85%',
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    padding: 20, paddingBottom: 36,
+    borderTopWidth: 1, borderTopColor: Colors.borderColor,
     maxHeight: '70%',
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: Colors.text,
+  sheetHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: Colors.borderColor, alignSelf: 'center', marginBottom: 16,
   },
-  exerciseItem: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderColor,
+  sheetTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 16 },
+  sheetItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderColor,
   },
-  exerciseItemText: {
-    fontSize: 16,
-    color: Colors.text,
-  },
-  modalCloseButton: {
-    marginTop: 15,
-    padding: 15,
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  modalCloseText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  sheetItemIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sheetItemText: { flex: 1, fontSize: 15, color: '#FFFFFF', fontWeight: '500' },
+
+  // Log modal
   input: {
-    borderWidth: 1,
-    borderColor: Colors.borderColor,
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    marginBottom: 20,
-    color: Colors.text,
-    backgroundColor: Colors.background,
+    borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 12,
+    padding: 14, fontSize: 16, marginBottom: 16,
+    color: '#FFFFFF', backgroundColor: Colors.background,
   },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 15,
-    borderRadius: 10,
+  modalBtns: { flexDirection: 'row', gap: 10 },
+  cancelBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.borderColor,
     alignItems: 'center',
   },
-  cancelButton: {
-    backgroundColor: Colors.darkGray,
+  cancelBtnText: { fontSize: 15, fontWeight: '600', color: Colors.gray },
+  saveBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: Colors.primary, alignItems: 'center',
   },
-  saveButton: {
-    backgroundColor: Colors.primary,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  chartTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 });
 
 export default ProgressScreen;

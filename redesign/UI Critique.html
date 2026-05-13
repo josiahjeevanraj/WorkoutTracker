@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Workout Tracker — UI Critique & Redesign</title>
+<link rel="stylesheet" href="styles.css" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  body { background: #0a0c12; }
+  .summary {
+    max-width: 1100px;
+    margin: 32px auto 8px;
+    padding: 28px 32px;
+    background: linear-gradient(135deg, rgba(88,216,219,0.06), rgba(99,102,241,0.08));
+    border: 1px solid rgba(88,216,219,0.18);
+    border-radius: 18px;
+    color: #E5E7EB;
+    font-family: -apple-system, system-ui, sans-serif;
+  }
+  .summary h1 { margin: 0 0 8px; font-size: 28px; color: #F2F5FA; letter-spacing: -0.02em; }
+  .summary p.lead { color: #A5B0C5; margin: 0 0 20px; line-height: 1.5; }
+  .issues { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .issue { padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
+  .issue h4 { margin: 0 0 4px; font-size: 13px; color: #58D8DB; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; }
+  .issue p { margin: 0; font-size: 13px; color: #D8DEEA; line-height: 1.5; }
+  .legend { display: flex; gap: 20px; margin-top: 18px; font-size: 12px; color: #A5B0C5; }
+  .legend .dot { width: 12px; height: 12px; border-radius: 999px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="current-screens.jsx"></script>
+<script type="text/babel" src="redesigned-screens.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { DesignCanvas, DCSection, DCArtboard } = window;
+const {
+  CurrentHome, CurrentWorkouts, CurrentCalendar, CurrentProfile,
+  RedesignedHome, RedesignedWorkouts, RedesignedCalendar, RedesignedProfile,
+} = window;
+
+const FRAME_W = 393;
+const FRAME_H = 852;
+
+function Phone({ children }) {
+  return (
+    <div style={{
+      width: FRAME_W, height: FRAME_H, borderRadius: 48, overflow: 'hidden',
+      position: 'relative', background: '#000',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.45), 0 0 0 2px rgba(255,255,255,0.06), inset 0 0 0 1px rgba(255,255,255,0.04)',
+      fontFamily: '-apple-system, "SF Pro Text", system-ui, sans-serif',
+      WebkitFontSmoothing: 'antialiased',
+    }}>
+      {/* dynamic island */}
+      <div style={{
+        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
+      }} />
+      <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+        {children}
+      </div>
+      {/* home indicator */}
+      <div style={{
+        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+        width: 139, height: 5, borderRadius: 100,
+        background: 'rgba(255,255,255,0.7)', zIndex: 60, pointerEvents: 'none',
+      }} />
+    </div>
+  );
+}
+
+function Summary() {
+  const issues = [
+    { t: 'Color contrast is broken', d: 'Cyan #58d8db is used as body text on dark navy — fails WCAG AA. Primary navy #283b89 disappears against the background. Hierarchy collapses.' },
+    { t: 'No identity, no hero', d: '"Your Progress / Track your fitness journey" is generic copy. There\'s no greeting, no streak, no avatar — nothing that says "this is *your* app".' },
+    { t: 'Pill soup', d: 'Home stacks two rows of pill selectors (period + metric) before showing any data — eats half the viewport with chrome.' },
+    { t: 'Calendar has no signal', d: 'Every workout day gets the same green dot. Can\'t distinguish a 20-min walk from a 90-min leg day at a glance.' },
+    { t: 'Workout cards all look the same', d: 'Leg Day, HIIT, Push Day — identical cards. No category color, no PR badges, no weight progression hints.' },
+    { t: 'Stat cards = rainbow chaos', d: 'Random red/green/blue/purple emoji-style icons clash with the brand. They look like a Material 1.0 dashboard, not a 2026 fitness app.' },
+    { t: 'Sign-out is destructive red', d: 'A bright #EF4444 button reserved for "delete forever" actions. Signing out is reversible — should be a quiet ghost button.' },
+    { t: 'Raw ISO dates', d: '"2025-01-22" is shown verbatim to the user. Humans say "Wed, Jan 22".' },
+  ];
+
+  return (
+    <div className="summary">
+      <h1>Workout Tracker — UI Audit</h1>
+      <p className="lead">A side-by-side critique. Left phone in each row is the current build (faithfully recreated from your screens); right phone is a proposed redesign that keeps the deep-navy + cyan brand DNA but fixes hierarchy, contrast, and personality.</p>
+      <div className="issues">
+        {issues.map(i => (
+          <div className="issue" key={i.t}>
+            <h4>{i.t}</h4>
+            <p>{i.d}</p>
+          </div>
+        ))}
+      </div>
+      <div className="legend">
+        <span><span className="dot" style={{ background:'#EF4444' }}></span>Issue in current</span>
+        <span><span className="dot" style={{ background:'#10B981' }}></span>Fix in redesign</span>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <React.Fragment>
+      <Summary />
+      <DesignCanvas title="Workout Tracker — Before / After">
+
+        <DCSection id="home" title="Home / Dashboard">
+          <DCArtboard id="home-current" label="Current — “Your Progress”" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><CurrentHome /></Phone>
+          </DCArtboard>
+          <DCArtboard id="home-new" label="Redesign — Personal hero + activity ring" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><RedesignedHome /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="workouts" title="Workout Log">
+          <DCArtboard id="workouts-current" label="Current — uniform cards" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><CurrentWorkouts /></Phone>
+          </DCArtboard>
+          <DCArtboard id="workouts-new" label="Redesign — categorized + summary + FAB" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><RedesignedWorkouts /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="calendar" title="Calendar">
+          <DCArtboard id="calendar-current" label="Current — single-color dots" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><CurrentCalendar /></Phone>
+          </DCArtboard>
+          <DCArtboard id="calendar-new" label="Redesign — intensity heatmap" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><RedesignedCalendar /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="profile" title="Profile">
+          <DCArtboard id="profile-current" label="Current — strings of text" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><CurrentProfile /></Phone>
+          </DCArtboard>
+          <DCArtboard id="profile-new" label="Redesign — identity hero + iconified rows" width={FRAME_W + 40} height={FRAME_H + 40}>
+            <Phone><RedesignedProfile /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+      </DesignCanvas>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

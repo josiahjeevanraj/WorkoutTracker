@@ -1,0 +1,164 @@
+/* ---------- Tokens ---------- */
+:root {
+  /* Current (problematic) */
+  --cur-bg: #111928;
+  --cur-card: #1F2937;
+  --cur-border: #374151;
+  --cur-text: #58d8db;       /* cyan — used as body text in current app */
+  --cur-primary: #283b89;    /* deep navy — used as accent */
+  --cur-gray: #6B7280;
+  --cur-darkgray: #374151;
+  --cur-success: #10B981;
+  --cur-error: #EF4444;
+  --cur-warning: #F59E0B;
+  --cur-white: #FFFFFF;
+
+  /* Redesigned palette — keeps the brand DNA (deep navy + cyan accent) but fixes hierarchy */
+  --r-bg: #0B1220;            /* slightly deeper, more saturated */
+  --r-surface: #131C2E;       /* card */
+  --r-surface-2: #1B2740;     /* elevated card */
+  --r-border: #243150;
+  --r-text: #F2F5FA;          /* primary text — white-ish, high contrast */
+  --r-text-2: #A5B0C5;        /* secondary text */
+  --r-text-3: #6A7691;        /* tertiary / labels */
+  --r-accent: #58D8DB;        /* cyan — kept as ACCENT only */
+  --r-accent-2: #4FB8FF;      /* blue accent for secondary */
+  --r-action: #6366F1;        /* indigo for primary CTAs (more contrast on dark) */
+  --r-action-grad: linear-gradient(135deg, #58D8DB 0%, #6366F1 100%);
+  --r-success: #34D399;
+  --r-warn: #FBBF24;
+  --r-danger: #F87171;
+  --r-heat-1: rgba(88,216,219,0.14);
+  --r-heat-2: rgba(88,216,219,0.32);
+  --r-heat-3: rgba(88,216,219,0.55);
+  --r-heat-4: rgba(88,216,219,0.85);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+  background: #0a0c12;
+  color: #E5E7EB;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Phone screen frame */
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.phone-screen.current { background: var(--cur-bg); color: var(--cur-text); }
+.phone-screen.redesign { background: var(--r-bg); color: var(--r-text); }
+
+.scroll-area {
+  flex: 1;
+  overflow: hidden;
+  padding: 0 18px 90px 18px;
+}
+
+/* Status bar safe area */
+.safe-top { height: 8px; flex-shrink: 0; }
+
+/* Tab bar */
+.tabbar {
+  position: absolute;
+  bottom: 0;
+  left: 0; right: 0;
+  height: 78px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding-top: 10px;
+  border-top: 1px solid;
+}
+.current .tabbar { background: var(--cur-card); border-top-color: var(--cur-border); }
+.redesign .tabbar { background: rgba(11,18,32,0.85); backdrop-filter: blur(20px); border-top-color: var(--r-border); }
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+}
+.tab .ic {
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+}
+.current .tab { color: var(--cur-gray); }
+.current .tab.active { color: var(--cur-primary); }
+.redesign .tab { color: var(--r-text-3); }
+.redesign .tab.active { color: var(--r-accent); }
+
+/* ---------- Annotation tags (red dots + labels for critique) ---------- */
+.crit {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.crit .pin {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #EF4444;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  display: grid; place-items: center;
+  box-shadow: 0 0 0 4px rgba(239,68,68,0.18), 0 4px 14px rgba(239,68,68,0.5);
+  flex-shrink: 0;
+}
+.crit .label {
+  background: #1c1c1c;
+  color: #fff;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  border: 1px solid #333;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+.crit.right { flex-direction: row-reverse; }
+
+/* Improvement tags (green) */
+.win {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+.win .pin {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: #10B981;
+  color: white;
+  font-weight: 700;
+  font-size: 12px;
+  display: grid; place-items: center;
+  box-shadow: 0 0 0 4px rgba(16,185,129,0.2), 0 4px 14px rgba(16,185,129,0.5);
+  flex-shrink: 0;
+}
+.win .label {
+  background: #062a20;
+  color: #d1fae5;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+  border: 1px solid #10B981;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+.win.right { flex-direction: row-reverse; }
