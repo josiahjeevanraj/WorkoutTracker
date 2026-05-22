@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Animated,
@@ -49,7 +49,7 @@ const getWorkoutColor = (workout = '') => {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const CalendarScreen = () => {
+const CalendarScreen = ({ embedded = false, sessions = [] }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editingData, setEditingData] = useState({ caloriesConsumed: '', caloriesBurned: '', weight: '', workouts: [] });
@@ -66,6 +66,7 @@ const CalendarScreen = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState(null);
 
   const workoutCategories = {
     'Upper Body Push': ['Push-ups','Bench press (barbell)','Bench press (dumbbell)','Incline bench press','Overhead press','Shoulder press (dumbbell)','Arnold press','Lateral raises','Front raises','Tricep dips','Close-grip bench press','Tricep pushdowns','Overhead tricep extension'],
@@ -93,11 +94,22 @@ const CalendarScreen = () => {
     '2025-01-24': { caloriesConsumed: 2000, caloriesBurned: 520, weight: 74.0, workouts: ['HIIT Training - 30 mins','Deadlift - Set 1: 100kg x 6, Set 2: 100kg x 5'] },
   });
 
+  const sessionsByDate = useMemo(() => {
+    const map = {};
+    sessions.forEach(s => {
+      if (s.completedAt) {
+        const d = new Date(s.completedAt);
+        const key = toDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+        if (!map[key]) map[key] = [];
+        map[key].push(s);
+      }
+    });
+    return map;
+  }, [sessions]);
+
   const getIntensity = (dateKey) => {
-    const d = fitnessData[dateKey];
-    if (!d) return 0;
-    const n = d.workouts?.length || 0;
-    if (n === 0) return 1;
+    const n = sessionsByDate[dateKey]?.length || 0;
+    if (n === 0) return 0;
     if (n === 1) return 2;
     if (n === 2) return 3;
     return 4;
@@ -235,7 +247,10 @@ const CalendarScreen = () => {
     );
 
     const dayData = fitnessData[selectedDate];
-    if (!dayData) return (
+    const daySessions = sessionsByDate[selectedDate] || [];
+    const hasAnyData = dayData || daySessions.length > 0;
+
+    if (!hasAnyData) return (
       <View style={s.noDataContainer}>
         <Ionicons name="calendar-outline" size={48} color={Colors.gray} />
         <Text style={s.noDataText}>No data for {friendlyDate(selectedDate)}</Text>
@@ -246,8 +261,8 @@ const CalendarScreen = () => {
       </View>
     );
 
-    const net = dayData.caloriesConsumed - dayData.caloriesBurned;
-    const total = dayData.caloriesConsumed + dayData.caloriesBurned;
+    const net = dayData ? dayData.caloriesConsumed - dayData.caloriesBurned : 0;
+    const total = dayData ? dayData.caloriesConsumed + dayData.caloriesBurned : 0;
     const barPct = total > 0 ? (dayData.caloriesConsumed / total) : 0;
 
     return (
@@ -256,7 +271,7 @@ const CalendarScreen = () => {
         <View style={s.dayHeader}>
           <View>
             <Text style={s.dayTitle}>{friendlyDate(selectedDate)}</Text>
-            <Text style={s.daySubtitle}>{dayData.workouts?.length || 0} workouts{dayData.weight ? ` · ${dayData.weight} kg` : ''}</Text>
+            <Text style={s.daySubtitle}>{daySessions.length} workout{daySessions.length !== 1 ? 's' : ''}{dayData?.weight ? ` · ${dayData.weight} kg` : ''}</Text>
           </View>
           <TouchableOpacity onPress={startEditing} style={s.editIconBtn}>
             <Ionicons name="pencil" size={16} color={Colors.textSecondary} />
@@ -264,6 +279,7 @@ const CalendarScreen = () => {
         </View>
 
         {/* Energy balance bar */}
+        {dayData && (
         <View style={[s.energyCard, { borderColor: Colors.borderColor }]}>
           <View style={s.energyHeader}>
             <Text style={s.energyLabel}>NET ENERGY BALANCE</Text>
@@ -286,20 +302,54 @@ const CalendarScreen = () => {
             </View>
           </View>
         </View>
+        )}
 
-        {/* Sessions */}
-        {dayData.workouts?.length > 0 && (
+        {/* Sessions from workout history */}
+        {daySessions.length > 0 && (
           <View style={[s.sessionsCard, { borderColor: Colors.borderColor }]}>
             <Text style={s.sessionsTitle}>SESSIONS</Text>
-            {dayData.workouts.map((w, i) => {
-              const dur = w.match(/(\d+)\s*mins?/);
+            {daySessions.map((session, i) => {
+              const isExpanded = expandedSessionId === (session.id || i);
+              const exercises = session.exercises || [];
               return (
-                <View key={i} style={[s.sessionRow, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.borderColor }]}>
-                  <View style={[s.sessionStripe, { backgroundColor: getWorkoutColor(w) }]} />
-                  <View style={s.sessionInfo}>
-                    <Text style={s.sessionName} numberOfLines={1}>{w.split(' - ')[0]}</Text>
-                  </View>
-                  {dur && <Text style={s.sessionDuration}>{dur[1]} min</Text>}
+                <View key={session.id || i} style={i > 0 && { borderTopWidth: 1, borderTopColor: Colors.borderColor }}>
+                  <TouchableOpacity
+                    style={s.sessionRow}
+                    onPress={() => setExpandedSessionId(isExpanded ? null : (session.id || i))}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[s.sessionStripe, { backgroundColor: getWorkoutColor(session.name || '') }]} />
+                    <View style={s.sessionInfo}>
+                      <Text style={s.sessionName} numberOfLines={1}>{session.name}</Text>
+                      <Text style={s.sessionSubText}>
+                        {exercises.length > 0 ? `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''}` : 'No exercises'}
+                        {session.duration > 0 ? ` · ${session.duration} min` : ''}
+                      </Text>
+                    </View>
+                    <Ionicons
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      size={16}
+                      color={Colors.gray}
+                    />
+                  </TouchableOpacity>
+                  {isExpanded && exercises.length > 0 && (
+                    <View style={s.exerciseList}>
+                      {exercises.map((ex, ei) => (
+                        <View key={ei} style={s.exerciseItem}>
+                          <View style={[s.exDot, { backgroundColor: getWorkoutColor(session.name || '') }]} />
+                          <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
+                          <Text style={s.exMeta}>
+                            {ex.sets}×{ex.reps}{ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  {isExpanded && exercises.length === 0 && (
+                    <View style={s.exerciseList}>
+                      <Text style={s.sessionSubText}>No exercises recorded</Text>
+                    </View>
+                  )}
                 </View>
               );
             })}
@@ -491,7 +541,7 @@ const CalendarScreen = () => {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* Calendar header */}
-        <View style={s.calHeader}>
+        <View style={[s.calHeader, embedded && { paddingTop: 8 }]}>
           <View>
             <Text style={s.calYear}>{currentYear}</Text>
             <TouchableOpacity onPress={() => setShowMonthPicker(true)}>
@@ -670,6 +720,12 @@ const s = StyleSheet.create({
   sessionInfo: { flex: 1 },
   sessionName: { fontSize: 14, fontWeight: '600', color: '#FFFFFF' },
   sessionDuration: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
+  sessionSubText: { fontSize: 12, color: Colors.gray, marginTop: 2 },
+  exerciseList: { paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 },
+  exerciseItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5, gap: 8 },
+  exDot: { width: 6, height: 6, borderRadius: 3, flexShrink: 0 },
+  exName: { flex: 1, fontSize: 13, color: '#FFFFFF', fontWeight: '500' },
+  exMeta: { fontSize: 12, color: Colors.gray, fontWeight: '500' },
 
   // Edit form
   editHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

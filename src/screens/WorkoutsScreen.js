@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, TouchableOpacity,
+  View, Text, StyleSheet, SectionList, FlatList, TouchableOpacity,
   Modal, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
+import CalendarScreen from './CalendarScreen';
+import { EXERCISE_LIST } from '../constants/exercises';
 
 const daysAgo = (days, hour = 10, minute = 0) => {
   const d = new Date();
@@ -117,13 +119,28 @@ const DEFAULT_SESSIONS = [
   },
 ];
 
+// Categories match the "category" column in strength_exercises.csv
 const WORKOUT_CATEGORIES = [
-  { id: 'upper',       label: 'Upper Body', icon: 'barbell-outline',  workouts: ['Upper Body Push', 'Upper Body Pull', 'Chest & Triceps', 'Back & Biceps', 'Shoulders', 'Arms'] },
-  { id: 'lower',       label: 'Lower Body', icon: 'walk-outline',     workouts: ['Leg Day', 'Quads & Glutes', 'Hamstrings & Calves', 'Glute Focus', 'Calf & Ankle'] },
-  { id: 'full',        label: 'Full Body',  icon: 'body-outline',     workouts: ['Full Body Workout', 'Strength Training', 'Compound Lifts', 'Functional Training'] },
-  { id: 'cardio',      label: 'Cardio',     icon: 'heart-outline',    workouts: ['HIIT Cardio', 'Steady State Cardio', 'Sprint Intervals', 'Jump Rope', 'Cycling'] },
-  { id: 'core',        label: 'Core',       icon: 'fitness-outline',  workouts: ['Core & Abs', 'Plank Circuit', 'Ab Workout', 'Obliques Focus'] },
-  { id: 'flexibility', label: 'Flexibility',icon: 'leaf-outline',     workouts: ['Yoga Flow', 'Full Body Stretch', 'Mobility Work', 'Hip Flexor Release'] },
+  {
+    id: 'weighted',
+    label: 'Weighted',
+    icon: 'barbell-outline',
+    workouts: [
+      'Chest Day', 'Back Day', 'Shoulder Day', 'Arm Day', 'Leg Day',
+      'Push Day', 'Pull Day', 'Legs & Glutes', 'Full Body', 'Deadlift Day',
+      'Squat Focus', 'Glute Focus', 'Hamstring Focus', 'Core & Abs',
+    ],
+  },
+  {
+    id: 'calisthenics',
+    label: 'Calisthenics',
+    icon: 'body-outline',
+    workouts: [
+      'Push Circuit', 'Pull Circuit', 'Leg Circuit', 'Core Circuit',
+      'Upper Body Circuit', 'Full Body Calisthenics', 'Ab Workout',
+      'Chest & Triceps Circuit', 'Back & Biceps Circuit',
+    ],
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -161,18 +178,18 @@ const groupByDay = (sessions) => {
 
 const getCategoryInfo = (name = '') => {
   const n = name.toLowerCase();
-  if (n.includes('cardio') || n.includes('hiit') || n.includes('run') || n.includes('cycling') || n.includes('swim'))
-    return { color: Colors.softRed, label: 'Cardio' };
-  if (n.includes('upper') || n.includes('push') || n.includes('chest') || n.includes('tricep') || n.includes('shoulder'))
-    return { color: Colors.indigo, label: 'Upper body' };
-  if (n.includes('pull') || n.includes('back') || n.includes('bicep') || n.includes('row'))
-    return { color: Colors.indigo, label: 'Upper body' };
-  if (n.includes('leg') || n.includes('lower') || n.includes('squat') || n.includes('deadlift'))
-    return { color: Colors.text, label: 'Lower body' };
+  if (n.includes('circuit') || n.includes('calisthenics') || n.includes('bodyweight'))
+    return { color: Colors.green, label: 'Calisthenics' };
+  if (n.includes('push') || n.includes('chest') || n.includes('tricep') || n.includes('shoulder'))
+    return { color: Colors.indigo, label: 'Weighted' };
+  if (n.includes('pull') || n.includes('back') || n.includes('bicep') || n.includes('row') || n.includes('deadlift') || n.includes('lat'))
+    return { color: Colors.indigo, label: 'Weighted' };
+  if (n.includes('leg') || n.includes('squat') || n.includes('glute') || n.includes('hamstring') || n.includes('calf'))
+    return { color: Colors.text, label: 'Weighted' };
   if (n.includes('full') || n.includes('compound'))
-    return { color: Colors.green, label: 'Full body' };
-  if (n.includes('core') || n.includes('abs'))
-    return { color: Colors.amber, label: 'Core' };
+    return { color: Colors.primary, label: 'Weighted' };
+  if (n.includes('core') || n.includes('abs') || n.includes('oblique'))
+    return { color: Colors.amber, label: 'Weighted' };
   return { color: Colors.primary, label: 'Workout' };
 };
 
@@ -185,16 +202,24 @@ const WorkoutsScreen = () => {
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedWorkout, setSelectedWorkout] = useState('');
-  const [workoutDropdownOpen, setWorkoutDropdownOpen] = useState(false);
   const [logExercises, setLogExercises] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editedSession, setEditedSession] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [activeView, setActiveView] = useState('list');
+  const [exPickerVisible, setExPickerVisible] = useState(false);
+  const [exPickerTargetKey, setExPickerTargetKey] = useState(null);
+  const [exPickerSearch, setExPickerSearch] = useState('');
+  const [exPickerContext, setExPickerContext] = useState('log'); // 'log' | 'edit'
 
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => { loadHistory(true); }, []);
 
-  const loadHistory = async () => {
-    const saved = await StorageService.getWorkoutHistory();
-    if (saved.length === 0) {
+  const loadHistory = async (seed = false) => {
+    const [saved, isUnset] = await Promise.all([
+      StorageService.getWorkoutHistory(),
+      seed ? StorageService.isWorkoutHistoryUnset() : Promise.resolve(false),
+    ]);
+    if (seed && isUnset) {
       for (const session of DEFAULT_SESSIONS) await StorageService.addWorkoutSession(session);
       setHistory(await StorageService.getWorkoutHistory());
     } else {
@@ -225,7 +250,20 @@ const WorkoutsScreen = () => {
     }));
   }, [history, collapsedDays]);
 
-  const closeDetail = () => { setSelectedSession(null); setEditMode(false); setEditedSession(null); };
+  const closeDetail = () => {
+    setSelectedSession(null);
+    setEditMode(false);
+    setEditedSession(null);
+    setConfirmDelete(false);
+  };
+
+  const executeDelete = async () => {
+    const id = selectedSession?.id;
+    if (!id) return;
+    closeDetail();
+    await StorageService.deleteWorkoutSession(id);
+    setHistory(prev => prev.filter(s => s.id !== id));
+  };
   const enterEditMode = () => {
     setEditedSession({ ...selectedSession, exercises: (selectedSession.exercises || []).map((ex, i) => ({ ...ex, _key: i.toString() })) });
     setEditMode(true);
@@ -247,8 +285,8 @@ const WorkoutsScreen = () => {
   const addExercise = () =>
     setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: '3', reps: '10', weight: '', _key: Date.now().toString() }] }));
 
-  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setWorkoutDropdownOpen(false); setLogExercises([]); };
-  const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(''); setWorkoutDropdownOpen(false); setLogExercises([]); };
+  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); };
+  const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
   const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: '3', reps: '10', _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeLogExercise = (key) => setLogExercises(prev => prev.filter(ex => ex._key !== key));
@@ -323,85 +361,117 @@ const WorkoutsScreen = () => {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerSub}>This month</Text>
-          <Text style={styles.headerTitle}>Workouts</Text>
+        <Text style={styles.headerTitle}>Workouts</Text>
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.toggleBtn, activeView === 'list' && styles.toggleBtnActive]}
+            onPress={() => setActiveView('list')}
+          >
+            <Ionicons name="list-outline" size={15} color={activeView === 'list' ? '#FFFFFF' : Colors.gray} />
+            <Text style={[styles.toggleBtnText, activeView === 'list' && styles.toggleBtnTextActive]}>List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, activeView === 'calendar' && styles.toggleBtnActive]}
+            onPress={() => setActiveView('calendar')}
+          >
+            <Ionicons name="calendar-outline" size={15} color={activeView === 'calendar' ? '#FFFFFF' : Colors.gray} />
+            <Text style={[styles.toggleBtnText, activeView === 'calendar' && styles.toggleBtnTextActive]}>Calendar</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.searchBtn}>
-          <Ionicons name="search-outline" size={18} color={Colors.textSecondary} />
-        </TouchableOpacity>
       </View>
 
-      {/* Summary bar */}
-      <View style={styles.summaryBar}>
-        {[
-          { l: 'Sessions', v: String(summaryStats.sessions) },
-          { l: 'Hours',    v: summaryStats.hours },
-          { l: 'Volume',   v: '32k' },
-        ].map(s => (
-          <View key={s.l} style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>{s.l.toUpperCase()}</Text>
-            <Text style={styles.summaryValue}>{s.v}</Text>
+      {activeView === 'list' ? (
+        <>
+          {/* Summary bar */}
+          <View style={styles.summaryBar}>
+            {[
+              { l: 'Sessions', v: String(summaryStats.sessions) },
+              { l: 'Hours',    v: summaryStats.hours },
+            ].map(s => (
+              <View key={s.l} style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>{s.l.toUpperCase()}</Text>
+                <Text style={styles.summaryValue}>{s.v}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="barbell-outline" size={48} color={Colors.gray} />
-            <Text style={styles.emptyText}>No workouts logged yet</Text>
-            <Text style={styles.emptySubtext}>Tap Log Workout to add your first session</Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-        stickySectionHeadersEnabled={false}
-      />
+          <SectionList
+            sections={sections}
+            keyExtractor={item => item.id}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="barbell-outline" size={48} color={Colors.gray} />
+                <Text style={styles.emptyText}>No workouts logged yet</Text>
+                <Text style={styles.emptySubtext}>Tap Log Workout to add your first session</Text>
+              </View>
+            }
+            showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={false}
+          />
 
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} onPress={() => setLogModalVisible(true)} activeOpacity={0.85}>
-        <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
-        <Text style={styles.fabText}>Log Workout</Text>
-      </TouchableOpacity>
+          {/* FAB */}
+          <TouchableOpacity style={styles.fab} onPress={() => setLogModalVisible(true)} activeOpacity={0.85}>
+            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.fabText}>Log Workout</Text>
+          </TouchableOpacity>
+        </>
+      ) : (
+        <CalendarScreen embedded sessions={history} />
+      )}
 
       {/* ── Detail Modal ────────────────────────────────────────────────────── */}
       <Modal visible={!!selectedSession} animationType="slide" transparent onRequestClose={editMode ? cancelEdit : closeDetail}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.detailModal}>
             <View style={styles.modalHandle} />
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-              <View style={styles.detailHeader}>
+            {/* Header — outside ScrollView so touches always register */}
+            <View style={styles.detailHeader}>
+              {editMode ? (
+                <TextInput
+                  style={[styles.detailName, styles.detailNameInput]}
+                  value={editedSession?.name}
+                  onChangeText={text => setEditedSession(prev => ({ ...prev, name: text }))}
+                  placeholder="Workout name"
+                  placeholderTextColor={Colors.gray}
+                />
+              ) : (
+                <Text style={styles.detailName} numberOfLines={1}>{selectedSession?.name}</Text>
+              )}
+              <View style={styles.detailHeaderActions}>
                 {editMode ? (
-                  <TextInput
-                    style={[styles.detailName, styles.detailNameInput]}
-                    value={editedSession?.name}
-                    onChangeText={text => setEditedSession(prev => ({ ...prev, name: text }))}
-                    placeholder="Workout name"
-                    placeholderTextColor={Colors.gray}
-                  />
+                  <>
+                    <TouchableOpacity onPress={handleSaveEdit} style={styles.iconButton}><Ionicons name="checkmark" size={24} color={Colors.success} /></TouchableOpacity>
+                    <TouchableOpacity onPress={cancelEdit} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
+                  </>
+                ) : confirmDelete ? (
+                  <>
+                    <TouchableOpacity onPress={() => setConfirmDelete(false)} style={styles.iconButton}><Ionicons name="close-circle-outline" size={22} color={Colors.gray} /></TouchableOpacity>
+                    <TouchableOpacity onPress={executeDelete} style={styles.deleteConfirmBtn}>
+                      <Text style={styles.deleteConfirmBtnText}>Delete</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
-                  <Text style={styles.detailName}>{selectedSession?.name}</Text>
+                  <>
+                    <TouchableOpacity onPress={() => setConfirmDelete(true)} style={styles.iconButton}><Ionicons name="trash-outline" size={20} color={Colors.softRed} /></TouchableOpacity>
+                    <TouchableOpacity onPress={enterEditMode} style={styles.iconButton}><Ionicons name="pencil" size={20} color={Colors.text} /></TouchableOpacity>
+                    <TouchableOpacity onPress={closeDetail} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
+                  </>
                 )}
-                <View style={styles.detailHeaderActions}>
-                  {editMode ? (
-                    <>
-                      <TouchableOpacity onPress={handleSaveEdit} style={styles.iconButton}><Ionicons name="checkmark" size={24} color={Colors.success} /></TouchableOpacity>
-                      <TouchableOpacity onPress={cancelEdit} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity onPress={enterEditMode} style={styles.iconButton}><Ionicons name="pencil" size={20} color={Colors.text} /></TouchableOpacity>
-                      <TouchableOpacity onPress={closeDetail} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
-                    </>
-                  )}
-                </View>
               </View>
+            </View>
+
+            {confirmDelete && (
+              <View style={styles.deleteConfirmBar}>
+                <Ionicons name="warning-outline" size={16} color={Colors.softRed} />
+                <Text style={styles.deleteConfirmText}>Delete this workout? This can't be undone.</Text>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
               {selectedSession && (
                 <Text style={styles.detailDate}>
@@ -415,15 +485,25 @@ const WorkoutsScreen = () => {
                   <>
                     {(editedSession?.exercises || []).map(ex => (
                       <View key={ex._key} style={styles.editExerciseBlock}>
-                        <View style={styles.editExerciseNameRow}>
-                          <TextInput style={[styles.editInput, styles.editNameInput]} value={ex.name} onChangeText={text => updateExercise(ex._key, 'name', text)} placeholder="Exercise name" placeholderTextColor={Colors.gray} />
-                          <TouchableOpacity onPress={() => removeExercise(ex._key)} style={styles.removeExBtn}><Ionicons name="close-circle" size={22} color={Colors.error} /></TouchableOpacity>
-                        </View>
+                        <TouchableOpacity
+                          style={styles.exPickerRow}
+                          onPress={() => { setExPickerContext('edit'); setExPickerTargetKey(ex._key); setExPickerSearch(''); setExPickerVisible(true); }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
+                          <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
+                            {ex.name || 'Select exercise'}
+                          </Text>
+                          <Ionicons name="chevron-down" size={16} color={Colors.gray} />
+                          <TouchableOpacity onPress={() => removeExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Ionicons name="close-circle" size={20} color={Colors.error} />
+                          </TouchableOpacity>
+                        </TouchableOpacity>
                         <View style={styles.editExerciseStatsRow}>
                           <TextInput style={[styles.editInput, styles.editSmallInput]} value={String(ex.sets)} onChangeText={text => updateExercise(ex._key, 'sets', text)} placeholder="Sets" placeholderTextColor={Colors.gray} keyboardType="numeric" />
                           <Text style={styles.editSeparator}>×</Text>
                           <TextInput style={[styles.editInput, styles.editSmallInput]} value={String(ex.reps)} onChangeText={text => updateExercise(ex._key, 'reps', text)} placeholder="Reps" placeholderTextColor={Colors.gray} />
-                          <TextInput style={[styles.editInput, styles.editWeightInput]} value={ex.weight === '-' ? '' : (ex.weight || '')} onChangeText={text => updateExercise(ex._key, 'weight', text)} placeholder="Weight" placeholderTextColor={Colors.gray} />
+                          <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.weight === '-' ? '' : (ex.weight || '')} onChangeText={text => updateExercise(ex._key, 'weight', text)} placeholder="kg" placeholderTextColor={Colors.gray} />
                         </View>
                       </View>
                     ))}
@@ -482,41 +562,37 @@ const WorkoutsScreen = () => {
 
               {selectedCategory && (
                 <>
-                  <Text style={styles.logSectionLabel}>Workout</Text>
-                  <TouchableOpacity style={styles.dropdownHeader} onPress={() => setWorkoutDropdownOpen(prev => !prev)} activeOpacity={0.8}>
-                    <Text style={[styles.dropdownValue, !selectedWorkout && styles.dropdownPlaceholder]}>{selectedWorkout || 'Select a workout'}</Text>
-                    <Ionicons name={workoutDropdownOpen ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.gray} />
-                  </TouchableOpacity>
-                  {workoutDropdownOpen && (
-                    <View style={styles.dropdownList}>
-                      {selectedCategory.workouts.map(w => (
-                        <TouchableOpacity
-                          key={w}
-                          style={[styles.dropdownItem, selectedWorkout === w && styles.dropdownItemActive]}
-                          onPress={() => { setSelectedWorkout(w); setWorkoutDropdownOpen(false); setLogExercises([]); }}
-                        >
-                          <Text style={[styles.dropdownItemText, selectedWorkout === w && styles.dropdownItemTextActive]}>{w}</Text>
-                          {selectedWorkout === w && <Ionicons name="checkmark" size={16} color={Colors.primary} />}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </>
-              )}
+                  <Text style={[styles.logSectionLabel, { marginTop: 4 }]}>Session Name</Text>
+                  <TextInput
+                    style={styles.sessionNameInput}
+                    value={selectedWorkout}
+                    onChangeText={setSelectedWorkout}
+                    placeholder="e.g. Chest Day, Leg Day..."
+                    placeholderTextColor={Colors.gray}
+                  />
 
-              {selectedWorkout && (
-                <>
-                  <Text style={[styles.logSectionLabel, { marginTop: 20 }]}>Exercises</Text>
+                  <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
                   {logExercises.map(ex => (
                     <View key={ex._key} style={styles.editExerciseBlock}>
-                      <View style={styles.editExerciseNameRow}>
-                        <TextInput style={[styles.editInput, styles.editNameInput]} value={ex.name} onChangeText={text => updateLogExercise(ex._key, 'name', text)} placeholder="Exercise name" placeholderTextColor={Colors.gray} />
-                        <TouchableOpacity onPress={() => removeLogExercise(ex._key)} style={styles.removeExBtn}><Ionicons name="close-circle" size={22} color={Colors.error} /></TouchableOpacity>
-                      </View>
+                      <TouchableOpacity
+                        style={styles.exPickerRow}
+                        onPress={() => { setExPickerContext('log'); setExPickerTargetKey(ex._key); setExPickerSearch(''); setExPickerVisible(true); }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
+                        <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
+                          {ex.name || 'Select exercise'}
+                        </Text>
+                        <Ionicons name="chevron-down" size={16} color={Colors.gray} />
+                        <TouchableOpacity onPress={() => removeLogExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="close-circle" size={20} color={Colors.error} />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
                       <View style={styles.editExerciseStatsRow}>
                         <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.sets} onChangeText={text => updateLogExercise(ex._key, 'sets', text)} placeholder="Sets" placeholderTextColor={Colors.gray} keyboardType="numeric" />
                         <Text style={styles.editSeparator}>×</Text>
                         <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.reps} onChangeText={text => updateLogExercise(ex._key, 'reps', text)} placeholder="Reps" placeholderTextColor={Colors.gray} />
+                        <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.weight} onChangeText={text => updateLogExercise(ex._key, 'weight', text)} placeholder="kg" placeholderTextColor={Colors.gray} />
                       </View>
                     </View>
                   ))}
@@ -541,6 +617,63 @@ const WorkoutsScreen = () => {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* ── Exercise Picker Modal ───────────────────────────────────────────── */}
+      <Modal
+        visible={exPickerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setExPickerVisible(false)}
+      >
+        <TouchableOpacity style={styles.exPickerBackdrop} activeOpacity={1} onPress={() => setExPickerVisible(false)} />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.exPickerSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.exPickerTitle}>Select Exercise</Text>
+          <View style={styles.exSearchRow}>
+            <Ionicons name="search-outline" size={18} color={Colors.gray} />
+            <TextInput
+              style={styles.exSearchInput}
+              placeholder="Search 150+ exercises..."
+              placeholderTextColor={Colors.gray}
+              value={exPickerSearch}
+              onChangeText={setExPickerSearch}
+              autoFocus
+              returnKeyType="done"
+            />
+            {exPickerSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setExPickerSearch('')}>
+                <Ionicons name="close-circle" size={18} color={Colors.gray} />
+              </TouchableOpacity>
+            )}
+          </View>
+          <FlatList
+            data={exPickerSearch.trim().length > 0
+              ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(exPickerSearch.toLowerCase()))
+              : EXERCISE_LIST}
+            keyExtractor={item => item}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.exPickerItem}
+                onPress={() => {
+                  if (exPickerContext === 'edit') {
+                    updateExercise(exPickerTargetKey, 'name', item);
+                  } else {
+                    updateLogExercise(exPickerTargetKey, 'name', item);
+                  }
+                  setExPickerVisible(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="barbell-outline" size={16} color={Colors.gray} style={{ marginRight: 10 }} />
+                <Text style={styles.exPickerItemText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+            ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: Colors.borderColor, marginLeft: 44 }} />}
+          />
+        </KeyboardAvoidingView>
+      </Modal>
+
     </View>
   );
 };
@@ -553,14 +686,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingBottom: 14,
   },
-  headerSub: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
-  headerTitle: { fontSize: 26, fontWeight: '700', color: '#FFFFFF', marginTop: 2 },
-  searchBtn: {
-    width: 36, height: 36, borderRadius: 12,
-    backgroundColor: Colors.cardBackground,
+  headerTitle: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  viewToggle: {
+    flexDirection: 'row', backgroundColor: Colors.cardBackground,
+    borderRadius: 10, padding: 3,
     borderWidth: 1, borderColor: Colors.borderColor,
-    justifyContent: 'center', alignItems: 'center',
   },
+  toggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  toggleBtnActive: { backgroundColor: Colors.primary },
+  toggleBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
+  toggleBtnTextActive: { color: '#FFFFFF' },
 
   // Summary bar
   summaryBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 16 },
@@ -627,8 +762,20 @@ const styles = StyleSheet.create({
   modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.darkGray, alignSelf: 'center', marginBottom: 16 },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 20, textAlign: 'center' },
 
-  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
-  detailName: { fontSize: 24, fontWeight: 'bold', color: '#FFFFFF', flex: 1, marginRight: 12 },
+  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  detailName: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', flex: 1, marginRight: 8 },
+  deleteConfirmBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(248,113,113,0.1)', borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
+    borderWidth: 1, borderColor: 'rgba(248,113,113,0.25)',
+  },
+  deleteConfirmText: { flex: 1, fontSize: 13, color: Colors.softRed },
+  deleteConfirmBtn: {
+    backgroundColor: Colors.softRed, borderRadius: 8,
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  deleteConfirmBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   detailNameInput: { borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: Colors.background, fontSize: 22, fontWeight: 'bold' },
   detailHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconButton: { padding: 6 },
@@ -653,6 +800,34 @@ const styles = StyleSheet.create({
   editSeparator: { color: Colors.gray, fontSize: 16, fontWeight: '600' },
   addExerciseBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10, borderStyle: 'dashed', marginTop: 4 },
   addExerciseBtnText: { color: Colors.text, fontSize: 14, fontWeight: '500' },
+  exPickerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 12, borderRadius: 10, borderWidth: 1,
+    borderColor: Colors.borderColor, backgroundColor: Colors.background, marginBottom: 8,
+  },
+  exPickerText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#FFFFFF' },
+  exPickerPlaceholder: { color: Colors.gray },
+  exPickerBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  exPickerSheet: {
+    backgroundColor: Colors.cardBackground,
+    borderTopLeftRadius: 22, borderTopRightRadius: 22,
+    borderTopWidth: 1, borderTopColor: Colors.borderColor,
+    paddingHorizontal: 18, paddingBottom: 36,
+    maxHeight: '75%',
+  },
+  exPickerTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 14 },
+  exSearchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: Colors.background, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.borderColor,
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12,
+  },
+  exSearchInput: { flex: 1, fontSize: 15, color: '#FFFFFF' },
+  exPickerItem: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 13, paddingHorizontal: 4,
+  },
+  exPickerItemText: { flex: 1, fontSize: 14, color: '#FFFFFF', fontWeight: '400' },
 
   logSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
@@ -661,6 +836,11 @@ const styles = StyleSheet.create({
   categoryChipText: { color: Colors.text, fontSize: 14, fontWeight: '500' },
   categoryChipTextActive: { color: Colors.white },
 
+  sessionNameInput: {
+    borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10,
+    backgroundColor: Colors.background, padding: 12,
+    fontSize: 15, color: '#FFFFFF', marginBottom: 4,
+  },
   dropdownHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderColor, marginBottom: 4 },
   dropdownValue: { color: '#FFFFFF', fontSize: 15 },
   dropdownPlaceholder: { color: Colors.gray },

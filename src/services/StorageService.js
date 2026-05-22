@@ -98,7 +98,7 @@ class StorageService {
       const history = await this.getWorkoutHistory();
       const newSession = {
         ...session,
-        id: Date.now().toString(),
+        id: Date.now().toString() + Math.random().toString(36).slice(2, 7),
         completedAt: session.completedAt ?? new Date().toISOString(),
       };
       history.push(newSession);
@@ -120,6 +120,15 @@ class StorageService {
     }
   }
 
+  async isWorkoutHistoryUnset() {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+      return data === null;
+    } catch {
+      return false;
+    }
+  }
+
   async updateWorkoutSession(id, updates) {
     try {
       const history = await this.getWorkoutHistory();
@@ -133,6 +142,18 @@ class StorageService {
     } catch (error) {
       console.error('Error updating workout session:', error);
       return null;
+    }
+  }
+
+  async deleteWorkoutSession(id) {
+    try {
+      const history = await this.getWorkoutHistory();
+      const filtered = history.filter(s => s.id !== id);
+      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(filtered));
+      return true;
+    } catch (error) {
+      console.error('Error deleting workout session:', error);
+      return false;
     }
   }
 

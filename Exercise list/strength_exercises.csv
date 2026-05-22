@@ -1,0 +1,151 @@
+id,exercise_name,category,equipment,primary_muscle_group,secondary_muscle_groups,exercise_type
+1,Barbell Back Squat,Weighted,Barbell,Quadriceps,Glutes/Hamstrings/Core,Compound
+2,Barbell Front Squat,Weighted,Barbell,Quadriceps,Glutes/Core/Upper Back,Compound
+3,Barbell Deadlift,Weighted,Barbell,Hamstrings,Glutes/Lower Back/Traps,Compound
+4,Barbell Bench Press,Weighted,Barbell,Chest,Shoulders/Triceps,Compound
+5,Barbell Overhead Press,Weighted,Barbell,Shoulders,Triceps/Upper Chest/Core,Compound
+6,Barbell Row,Weighted,Barbell,Upper Back,Biceps/Rear Deltoid/Core,Compound
+7,Barbell Romanian Deadlift,Weighted,Barbell,Hamstrings,Glutes/Lower Back,Compound
+8,Barbell Hip Thrust,Weighted,Barbell,Glutes,Hamstrings/Core,Compound
+9,Barbell Lunge,Weighted,Barbell,Quadriceps,Glutes/Hamstrings/Core,Compound
+10,Barbell Sumo Deadlift,Weighted,Barbell,Hamstrings,Glutes/Adductors/Lower Back,Compound
+11,Barbell Incline Bench Press,Weighted,Barbell,Upper Chest,Shoulders/Triceps,Compound
+12,Barbell Close Grip Bench Press,Weighted,Barbell,Triceps,Chest/Shoulders,Compound
+13,Barbell Curl,Weighted,Barbell,Biceps,Forearms,Isolation
+14,Barbell Skull Crusher,Weighted,Barbell,Triceps,Shoulders,Isolation
+15,Barbell Good Morning,Weighted,Barbell,Hamstrings,Lower Back/Glutes,Compound
+16,Barbell Shrug,Weighted,Barbell,Traps,Forearms,Isolation
+17,Barbell Upright Row,Weighted,Barbell,Shoulders,Traps/Biceps,Compound
+18,Barbell Power Clean,Weighted,Barbell,Full Body,Hamstrings/Glutes/Traps/Shoulders,Compound
+19,Barbell Hang Clean,Weighted,Barbell,Full Body,Hamstrings/Traps/Shoulders,Compound
+20,Barbell Snatch,Weighted,Barbell,Full Body,Shoulders/Traps/Hamstrings/Glutes,Compound
+21,Dumbbell Bench Press,Weighted,Dumbbells,Chest,Shoulders/Triceps,Compound
+22,Dumbbell Shoulder Press,Weighted,Dumbbells,Shoulders,Triceps/Upper Chest,Compound
+23,Dumbbell Row,Weighted,Dumbbells,Upper Back,Biceps/Rear Deltoid,Compound
+24,Dumbbell Romanian Deadlift,Weighted,Dumbbells,Hamstrings,Glutes/Lower Back,Compound
+25,Dumbbell Lateral Raise,Weighted,Dumbbells,Side Deltoid,Traps,Isolation
+26,Dumbbell Front Raise,Weighted,Dumbbells,Anterior Deltoid,Upper Chest,Isolation
+27,Dumbbell Curl,Weighted,Dumbbells,Biceps,Forearms,Isolation
+28,Dumbbell Hammer Curl,Weighted,Dumbbells,Biceps,Forearms,Isolation
+29,Dumbbell Tricep Kickback,Weighted,Dumbbells,Triceps,Shoulders,Isolation
+30,Dumbbell Incline Bench Press,Weighted,Dumbbells,Upper Chest,Shoulders/Triceps,Compound
+31,Dumbbell Fly,Weighted,Dumbbells,Chest,Shoulders,Isolation
+32,Dumbbell Incline Fly,Weighted,Dumbbells,Upper Chest,Shoulders,Isolation
+33,Dumbbell Goblet Squat,Weighted,Dumbbells,Quadriceps,Glutes/Core,Compound
+34,Dumbbell Lunge,Weighted,Dumbbells,Quadriceps,Glutes/Hamstrings,Compound
+35,Dumbbell Step Up,Weighted,Dumbbells,Quadriceps,Glutes/Hamstrings,Compound
+36,Dumbbell Hip Thrust,Weighted,Dumbbells,Glutes,Hamstrings/Core,Compound
+37,Dumbbell Shrug,Weighted,Dumbbells,Traps,Forearms,Isolation
+38,Dumbbell Skull Crusher,Weighted,Dumbbells,Triceps,Shoulders,Isolation
+39,Dumbbell Reverse Fly,Weighted,Dumbbells,Rear Deltoid,Upper Back,Isolation
+40,Dumbbell Arnold Press,Weighted,Dumbbells,Shoulders,Triceps/Upper Chest,Compound
+41,Dumbbell Concentration Curl,Weighted,Dumbbells,Biceps,Forearms,Isolation
+42,Dumbbell Wrist Curl,Weighted,Dumbbells,Forearms,Biceps,Isolation
+43,Dumbbell Calf Raise,Weighted,Dumbbells,Calves,Hamstrings,Isolation
+44,Dumbbell Pullover,Weighted,Dumbbells,Chest,Lats/Triceps,Compound
+45,Dumbbell Split Squat,Weighted,Dumbbells,Quadriceps,Glutes/Hamstrings,Compound
+46,Lat Pulldown,Weighted,Cable Machine,Lats,Biceps/Rear Deltoid,Compound
+47,Seated Cable Row,Weighted,Cable Machine,Upper Back,Biceps/Rear Deltoid,Compound
+48,Cable Fly,Weighted,Cable Machine,Chest,Shoulders,Isolation
+49,Cable Lateral Raise,Weighted,Cable Machine,Side Deltoid,Traps,Isolation
+50,Cable Tricep Pushdown,Weighted,Cable Machine,Triceps,Shoulders,Isolation
+51,Cable Overhead Tricep Extension,Weighted,Cable Machine,Triceps,Shoulders,Isolation
+52,Cable Curl,Weighted,Cable Machine,Biceps,Forearms,Isolation
+53,Cable Face Pull,Weighted,Cable Machine,Rear Deltoid,Traps/Rotator Cuff,Isolation
+54,Cable Pull Through,Weighted,Cable Machine,Glutes,Hamstrings/Lower Back,Compound
+55,Cable Hip Abduction,Weighted,Cable Machine,Glutes,Hip Abductors,Isolation
+56,Cable Woodchop,Weighted,Cable Machine,Core,Shoulders/Obliques,Compound
+57,Cable Crunch,Weighted,Cable Machine,Abs,Obliques,Isolation
+58,Leg Press,Weighted,Machine,Quadriceps,Glutes/Hamstrings,Compound
+59,Leg Extension,Weighted,Machine,Quadriceps,,Isolation
+60,Leg Curl (Lying),Weighted,Machine,Hamstrings,Calves,Isolation
+61,Leg Curl (Seated),Weighted,Machine,Hamstrings,Calves,Isolation
+62,Hack Squat,Weighted,Machine,Quadriceps,Glutes/Hamstrings,Compound
+63,Smith Machine Squat,Weighted,Machine,Quadriceps,Glutes/Core,Compound
+64,Smith Machine Bench Press,Weighted,Machine,Chest,Shoulders/Triceps,Compound
+65,Chest Press Machine,Weighted,Machine,Chest,Shoulders/Triceps,Compound
+66,Shoulder Press Machine,Weighted,Machine,Shoulders,Triceps/Upper Chest,Compound
+67,Pec Deck Machine,Weighted,Machine,Chest,Shoulders,Isolation
+68,Seated Row Machine,Weighted,Machine,Upper Back,Biceps/Rear Deltoid,Compound
+69,Lat Pullover Machine,Weighted,Machine,Lats,Triceps,Compound
+70,Hip Abduction Machine,Weighted,Machine,Glutes,Hip Abductors,Isolation
+71,Hip Adduction Machine,Weighted,Machine,Hip Adductors,Glutes,Isolation
+72,Calf Raise Machine (Standing),Weighted,Machine,Calves,,Isolation
+73,Calf Raise Machine (Seated),Weighted,Machine,Soleus,Calves,Isolation
+74,Back Extension Machine,Weighted,Machine,Lower Back,Glutes/Hamstrings,Isolation
+75,Ab Crunch Machine,Weighted,Machine,Abs,Obliques,Isolation
+76,Pull-Up,Calisthenics,Bodyweight,Lats,Biceps/Rear Deltoid/Core,Compound
+77,Chin-Up,Calisthenics,Bodyweight,Lats,Biceps/Core,Compound
+78,Wide Grip Pull-Up,Calisthenics,Bodyweight,Lats,Rear Deltoid/Core,Compound
+79,Muscle-Up,Calisthenics,Bodyweight,Lats,Chest/Triceps/Core,Compound
+80,Push-Up,Calisthenics,Bodyweight,Chest,Shoulders/Triceps/Core,Compound
+81,Wide Push-Up,Calisthenics,Bodyweight,Chest,Shoulders/Triceps,Compound
+82,Diamond Push-Up,Calisthenics,Bodyweight,Triceps,Chest/Shoulders,Compound
+83,Decline Push-Up,Calisthenics,Bodyweight,Upper Chest,Shoulders/Triceps,Compound
+84,Pike Push-Up,Calisthenics,Bodyweight,Shoulders,Triceps/Upper Chest,Compound
+85,Archer Push-Up,Calisthenics,Bodyweight,Chest,Shoulders/Triceps,Compound
+86,Handstand Push-Up,Calisthenics,Bodyweight,Shoulders,Triceps/Upper Chest,Compound
+87,Dip,Calisthenics,Bodyweight,Chest,Triceps/Shoulders,Compound
+88,Tricep Dip (Bench),Calisthenics,Bodyweight,Triceps,Chest/Shoulders,Compound
+89,Inverted Row,Calisthenics,Bodyweight,Upper Back,Biceps/Rear Deltoid,Compound
+90,Body Saw,Calisthenics,Bodyweight,Core,Shoulders/Glutes,Compound
+91,Plank,Calisthenics,Bodyweight,Core,Shoulders/Glutes,Isometric
+92,Side Plank,Calisthenics,Bodyweight,Obliques,Core/Hip Abductors,Isometric
+93,Hollow Body Hold,Calisthenics,Bodyweight,Abs,Core,Isometric
+94,L-Sit,Calisthenics,Bodyweight,Abs,Hip Flexors/Triceps,Isometric
+95,Front Lever,Calisthenics,Bodyweight,Lats,Core/Shoulders,Isometric
+96,Back Lever,Calisthenics,Bodyweight,Chest,Shoulders/Core,Isometric
+97,Human Flag,Calisthenics,Bodyweight,Core,Shoulders/Lats,Isometric
+98,Pistol Squat,Calisthenics,Bodyweight,Quadriceps,Glutes/Hamstrings/Core,Compound
+99,Bulgarian Split Squat,Weighted,Bodyweight/Dumbbells,Quadriceps,Glutes/Hamstrings,Compound
+100,Bodyweight Squat,Calisthenics,Bodyweight,Quadriceps,Glutes/Hamstrings,Compound
+101,Jump Squat,Calisthenics,Bodyweight,Quadriceps,Glutes/Calves,Compound
+102,Walking Lunge,Calisthenics,Bodyweight,Quadriceps,Glutes/Hamstrings,Compound
+103,Reverse Lunge,Calisthenics,Bodyweight,Quadriceps,Glutes/Hamstrings,Compound
+104,Glute Bridge,Calisthenics,Bodyweight,Glutes,Hamstrings/Core,Compound
+105,Single Leg Glute Bridge,Calisthenics,Bodyweight,Glutes,Hamstrings/Core,Compound
+106,Donkey Kick,Calisthenics,Bodyweight,Glutes,Hamstrings/Core,Isolation
+107,Fire Hydrant,Calisthenics,Bodyweight,Glutes,Hip Abductors,Isolation
+108,Clamshell,Calisthenics,Bodyweight,Glutes,Hip Abductors,Isolation
+109,Bodyweight Hip Thrust,Calisthenics,Bodyweight,Glutes,Hamstrings/Core,Compound
+110,Nordic Curl,Weighted,Bodyweight/Partner,Hamstrings,Glutes,Compound
+111,Sit-Up,Calisthenics,Bodyweight,Abs,Hip Flexors,Isolation
+112,Crunch,Calisthenics,Bodyweight,Abs,Obliques,Isolation
+113,Bicycle Crunch,Calisthenics,Bodyweight,Abs,Obliques,Isolation
+114,Leg Raise,Calisthenics,Bodyweight,Abs,Hip Flexors,Isolation
+115,Hanging Leg Raise,Calisthenics,Bar,Abs,Hip Flexors/Core,Isolation
+116,Hanging Knee Raise,Calisthenics,Bar,Abs,Hip Flexors,Isolation
+117,Dragon Flag,Calisthenics,Bench,Core,Abs/Shoulders,Compound
+118,Ab Wheel Rollout,Weighted,Ab Wheel,Abs,Core/Shoulders,Compound
+119,Russian Twist,Calisthenics,Bodyweight,Obliques,Abs,Isolation
+120,V-Up,Calisthenics,Bodyweight,Abs,Hip Flexors,Isolation
+121,Toe Touch,Calisthenics,Bodyweight,Abs,Hamstrings,Isolation
+122,Mountain Climber,Calisthenics,Bodyweight,Core,Shoulders/Hip Flexors,Compound
+123,Burpee,Calisthenics,Bodyweight,Full Body,Chest/Shoulders/Core/Legs,Compound
+124,Kettlebell Swing,Weighted,Kettlebell,Glutes,Hamstrings/Core/Shoulders,Compound
+125,Kettlebell Goblet Squat,Weighted,Kettlebell,Quadriceps,Glutes/Core,Compound
+126,Kettlebell Clean,Weighted,Kettlebell,Full Body,Hamstrings/Glutes/Shoulders,Compound
+127,Kettlebell Snatch,Weighted,Kettlebell,Full Body,Shoulders/Hamstrings/Core,Compound
+128,Kettlebell Turkish Get-Up,Weighted,Kettlebell,Full Body,Core/Shoulders/Glutes,Compound
+129,Kettlebell Press,Weighted,Kettlebell,Shoulders,Triceps/Core,Compound
+130,Kettlebell Row,Weighted,Kettlebell,Upper Back,Biceps/Core,Compound
+131,Kettlebell Deadlift,Weighted,Kettlebell,Hamstrings,Glutes/Lower Back,Compound
+132,Kettlebell Halo,Weighted,Kettlebell,Shoulders,Core/Upper Back,Isolation
+133,EZ Bar Curl,Weighted,EZ Bar,Biceps,Forearms,Isolation
+134,EZ Bar Skull Crusher,Weighted,EZ Bar,Triceps,Shoulders,Isolation
+135,EZ Bar Overhead Extension,Weighted,EZ Bar,Triceps,Shoulders,Isolation
+136,Preacher Curl,Weighted,Machine/Barbell,Biceps,Forearms,Isolation
+137,Resistance Band Squat,Weighted,Resistance Band,Quadriceps,Glutes/Hamstrings,Compound
+138,Resistance Band Row,Weighted,Resistance Band,Upper Back,Biceps/Rear Deltoid,Compound
+139,Resistance Band Pull Apart,Weighted,Resistance Band,Rear Deltoid,Traps,Isolation
+140,Resistance Band Curl,Weighted,Resistance Band,Biceps,Forearms,Isolation
+141,Resistance Band Tricep Pushdown,Weighted,Resistance Band,Triceps,Shoulders,Isolation
+142,Resistance Band Lateral Walk,Weighted,Resistance Band,Glutes,Hip Abductors,Isolation
+143,Resistance Band Hip Thrust,Weighted,Resistance Band,Glutes,Hamstrings/Core,Compound
+144,Dumbbell Zottman Curl,Weighted,Dumbbells,Biceps,Forearms,Isolation
+145,Dumbbell Spider Curl,Weighted,Dumbbells,Biceps,Forearms,Isolation
+146,Hyperextension (Back Extension),Weighted,GHD/Bench,Lower Back,Glutes/Hamstrings,Isolation
+147,Farmer's Walk,Weighted,Dumbbells/Kettlebells,Forearms,Traps/Core/Shoulders,Compound
+148,Sled Push,Weighted,Sled,Quadriceps,Glutes/Hamstrings/Core,Compound
+149,Battle Ropes,Weighted,Battle Ropes,Shoulders,Core/Arms,Compound
+150,Box Jump,Weighted,Plyo Box,Quadriceps,Glutes/Calves,Compound

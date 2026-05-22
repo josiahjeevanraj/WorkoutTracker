@@ -1,21 +1,236 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Dimensions, ActivityIndicator,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Svg, {
   Circle, Path, Defs, Stop,
   LinearGradient as SvgGradient,
   Text as SvgText,
 } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_W = SCREEN_WIDTH - 36;
 
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DAY_LABELS = ['M','T','W','T','F','S','S'];
+const MON_LABELS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+
+const GOALS = { calories: 540, minutes: 60, workouts: 1 };
+
+const METRICS = [
+  { id: 'calories', label: 'Calories Burned', unit: 'kcal' },
+  { id: 'weight',   label: 'Body Weight',     unit: 'kg'   },
+  { id: 'workouts', label: 'Workouts',         unit: ''     },
+  { id: 'duration', label: 'Duration',         unit: 'min'  },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const toDateStr = d => d.toISOString().slice(0, 10);
+
+function getMondayOf(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return d;
+}
+
+function computeStreak(history) {
+  if (!history.length) return 0;
+  const days = new Set(history.map(s => s.completedAt.slice(0, 10)));
+  const today = toDateStr(new Date());
+  const yesterday = toDateStr(new Date(Date.now() - 86400000));
+  if (!days.has(today) && !days.has(yesterday)) return 0;
+  const d = new Date();
+  if (!days.has(today)) d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  let streak = 0;
+  while (days.has(toDateStr(d))) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function sessionInPeriod(completedAt, period, monday, today) {
+  const d = new Date(completedAt);
+  if (period === 'week') {
+    const diff = Math.floor((d - monday) / 86400000);
+    return diff >= 0 && diff < 7;
+  }
+  if (period === 'month') return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+  if (period === 'year')  return d.getFullYear() === today.getFullYear();
+  return true;
+}
+
+function buildSessionChartData(history, metricFn) {
+  const today = new Date();
+  const monday = getMondayOf(today);
+
+  const week = (() => {
+    const b = Array(7).fill(0);
+    history.forEach(s => {
+      const diff = Math.floor((new Date(s.completedAt) - monday) / 86400000);
+      if (diff >= 0 && diff < 7) b[diff] += metricFn(s);
+    });
+    return { labels: DAY_LABELS, data: b };
+  })();
+
+  const month = (() => {
+    const b = [0, 0, 0, 0];
+    history.forEach(s => {
+      const d = new Date(s.completedAt);
+      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth())
+        b[Math.min(Math.floor((d.getDate() - 1) / 7), 3)] += metricFn(s);
+    });
+    return { labels: ['W1','W2','W3','W4'], data: b };
+  })();
+
+  const year = (() => {
+    const b = Array(12).fill(0);
+    history.forEach(s => {
+      const d = new Date(s.completedAt);
+      if (d.getFullYear() === today.getFullYear()) b[d.getMonth()] += metricFn(s);
+    });
+    return { labels: MON_LABELS, data: b };
+  })();
+
+  const all = (() => {
+    const byYear = {};
+    history.forEach(s => {
+      const y = new Date(s.completedAt).getFullYear().toString();
+      byYear[y] = (byYear[y] || 0) + metricFn(s);
+    });
+    const years = Object.keys(byYear).sort();
+    return years.length
+      ? { labels: years, data: years.map(y => byYear[y]) }
+      : { labels: ['—'], data: [0] };
+  })();
+
+  return { week, month, year, all };
+}
+
+function buildWeightChartData(bodyMetrics) {
+  const today = new Date();
+  const monday = getMondayOf(today);
+
+  const forwardFill = arr => {
+    let last = 0;
+    return arr.map(v => { if (v > 0) last = v; return last; });
+  };
+
+  const week = (() => {
+    const b = Array(7).fill(0);
+    bodyMetrics.forEach(m => {
+      if (!m.weight) return;
+      const diff = Math.floor((new Date(m.date + 'T00:00:00') - monday) / 86400000);
+      if (diff >= 0 && diff < 7) b[diff] = m.weight;
+    });
+    return { labels: DAY_LABELS, data: forwardFill(b) };
+  })();
+
+  const month = (() => {
+    const b = [0, 0, 0, 0];
+    bodyMetrics.forEach(m => {
+      if (!m.weight) return;
+      const d = new Date(m.date + 'T00:00:00');
+      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth())
+        b[Math.min(Math.floor((d.getDate() - 1) / 7), 3)] = m.weight;
+    });
+    return { labels: ['W1','W2','W3','W4'], data: forwardFill(b) };
+  })();
+
+  const year = (() => {
+    const b = Array(12).fill(0);
+    bodyMetrics.forEach(m => {
+      if (!m.weight) return;
+      const d = new Date(m.date + 'T00:00:00');
+      if (d.getFullYear() === today.getFullYear()) b[d.getMonth()] = m.weight;
+    });
+    return { labels: MON_LABELS, data: forwardFill(b) };
+  })();
+
+  const all = (() => {
+    const byYear = {};
+    bodyMetrics.forEach(m => {
+      if (!m.weight) return;
+      byYear[new Date(m.date + 'T00:00:00').getFullYear().toString()] = m.weight;
+    });
+    const years = Object.keys(byYear).sort();
+    return years.length
+      ? { labels: years, data: years.map(y => byYear[y]) }
+      : { labels: ['—'], data: [0] };
+  })();
+
+  return { week, month, year, all };
+}
+
+function sumPeriod(history, period, metricFn) {
+  const today = new Date();
+  const monday = getMondayOf(today);
+  return history
+    .filter(s => sessionInPeriod(s.completedAt, period, monday, today))
+    .reduce((sum, s) => sum + metricFn(s), 0);
+}
+
+function prevPeriodSum(history, period, metricFn) {
+  const today = new Date();
+  const monday = getMondayOf(today);
+  return history.filter(s => {
+    const d = new Date(s.completedAt);
+    if (period === 'week') {
+      const prevMon = new Date(monday); prevMon.setDate(prevMon.getDate() - 7);
+      const diff = Math.floor((d - prevMon) / 86400000);
+      return diff >= 0 && diff < 7;
+    }
+    if (period === 'month') {
+      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      return d.getFullYear() === prev.getFullYear() && d.getMonth() === prev.getMonth();
+    }
+    if (period === 'year') return d.getFullYear() === today.getFullYear() - 1;
+    return false;
+  }).reduce((sum, s) => sum + metricFn(s), 0);
+}
+
+function parseVolume(exercises = []) {
+  return exercises.reduce((total, ex) => {
+    const wMatch = String(ex.weight || '').match(/^(\d+(\.\d+)?)/);
+    const rMatch = String(ex.reps   || '').match(/^(\d+)/);
+    if (!wMatch || !rMatch) return total;
+    return total + parseFloat(wMatch[1]) * parseInt(rMatch[1]) * (ex.sets || 1);
+  }, 0);
+}
+
+function fmtVolume(kg) {
+  if (kg === 0) return '0';
+  return kg >= 1000 ? `${(kg / 1000).toFixed(1)}k` : String(Math.round(kg));
+}
+
+function fmtAbsDiff(curr, prev, fmt = v => String(Math.round(v))) {
+  const diff = curr - prev;
+  const sign = diff >= 0 ? '+' : '−';
+  return `${sign}${fmt(Math.abs(diff))} vs last`;
+}
+
+function fmtPct(curr, prev) {
+  if (!prev) return null;
+  const pct = ((curr - prev) / prev) * 100;
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+}
+
 // ─── Activity ring ────────────────────────────────────────────────────────────
-const ActivityRing = ({ progress = 0.78 }) => {
+
+const ActivityRing = ({ progress = 0 }) => {
   const r = 30;
   const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - progress);
+  const offset = circ * (1 - Math.max(0, Math.min(1, progress)));
   return (
     <Svg width={76} height={76} viewBox="0 0 76 76">
       <Defs>
@@ -40,9 +255,18 @@ const ActivityRing = ({ progress = 0.78 }) => {
   );
 };
 
-// ─── Mini area chart ──────────────────────────────────────────────────────────
+// ─── Area chart ───────────────────────────────────────────────────────────────
+
 const AreaChart = ({ data, labels }) => {
   if (!data || data.length < 2) return null;
+  if (data.every(v => v === 0)) {
+    return (
+      <View style={styles.emptyChart}>
+        <Ionicons name="analytics-outline" size={24} color={Colors.gray} />
+        <Text style={styles.emptyChartText}>No data for this period</Text>
+      </View>
+    );
+  }
   const VW = 300; const VH = 100; const PAD = 10;
   const max = Math.max(...data); const min = Math.min(...data);
   const range = max - min || 1;
@@ -79,65 +303,122 @@ const AreaChart = ({ data, labels }) => {
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
+
 const HomeScreen = () => {
   const [selectedMetric, setSelectedMetric] = useState('calories');
   const [timePeriod, setTimePeriod] = useState('week');
+  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [bodyMetrics, setBodyMetrics] = useState([]);
+  const [profile, setProfile] = useState(null);
 
-  const metrics = [
-    { id: 'calories', label: 'Calories Burned', unit: 'kcal' },
-    { id: 'weight', label: 'Body Weight', unit: 'kg' },
-    { id: 'workouts', label: 'Workouts', unit: '' },
-    { id: 'duration', label: 'Duration', unit: 'min' },
-  ];
-
-  const sampleData = {
-    calories: {
-      week:  { labels: ['M','T','W','T','F','S','S'], data: [420, 380, 450, 390, 480, 520, 410] },
-      month: { labels: ['W1','W2','W3','W4'], data: [2850, 3100, 2950, 3200] },
-      year:  { labels: ['J','F','M','A','M','J','J','A','S','O','N','D'], data: [12000,11500,13200,12800,14000,13500,14200,13800,12900,13100,12500,13000] },
-      all:   { labels: ['2023','2024','2025'], data: [145000, 156000, 8500] },
-    },
-    weight: {
-      week:  { labels: ['M','T','W','T','F','S','S'], data: [75.2,75.1,74.9,74.8,74.7,74.5,74.3] },
-      month: { labels: ['W1','W2','W3','W4'], data: [75.2,74.8,74.5,74.1] },
-      year:  { labels: ['J','F','M','A','M','J','J','A','S','O','N','D'], data: [78,77.5,77,76.5,76,75.8,75.5,75.2,74.9,74.6,74.3,74.1] },
-      all:   { labels: ['2023','2024','2025'], data: [82, 78, 74.1] },
-    },
-    workouts: {
-      week:  { labels: ['M','T','W','T','F','S','S'], data: [1,0,1,1,0,1,0] },
-      month: { labels: ['W1','W2','W3','W4'], data: [4,5,4,3] },
-      year:  { labels: ['J','F','M','A','M','J','J','A','S','O','N','D'], data: [18,16,20,19,22,21,20,18,17,19,16,18] },
-      all:   { labels: ['2023','2024','2025'], data: [180, 234, 12] },
-    },
-    duration: {
-      week:  { labels: ['M','T','W','T','F','S','S'], data: [45,0,60,30,0,75,0] },
-      month: { labels: ['W1','W2','W3','W4'], data: [210,285,195,240] },
-      year:  { labels: ['J','F','M','A','M','J','J','A','S','O','N','D'], data: [950,880,1020,980,1100,1050,990,920,870,960,840,910] },
-      all:   { labels: ['2023','2024','2025'], data: [9200, 11500, 620] },
-    },
-  };
-
-  const periodStats = {
-    week:  { calories: '2,450', workouts: '4', weight: '74.1', minutes: '210' },
-    month: { calories: '12,100', workouts: '16', weight: '74.1', minutes: '930' },
-    year:  { calories: '156,500', workouts: '234', weight: '74.1', minutes: '11,470' },
-    all:   { calories: '309,500', workouts: '426', weight: '74.1', minutes: '21,320' },
-  };
-
-  const currentStats = periodStats[timePeriod] || periodStats.week;
-  const currentData = sampleData[selectedMetric]?.[timePeriod] || sampleData.calories.week;
-  const currentMetric = metrics.find(m => m.id === selectedMetric);
-
-  const bigNum = {
-    calories:  { value: currentStats.calories, unit: 'kcal' },
-    weight:    { value: currentStats.weight,   unit: 'kg' },
-    workouts:  { value: currentStats.workouts, unit: 'sessions' },
-    duration:  { value: currentStats.minutes,  unit: 'min' },
-  }[selectedMetric];
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    (async () => {
+      const [hist, prog, prof] = await Promise.all([
+        StorageService.getWorkoutHistory(),
+        StorageService.getProgressData(),
+        StorageService.getUserProfile(),
+      ]);
+      if (!active) return;
+      setHistory(hist || []);
+      setBodyMetrics(((prog?.bodyMetrics) || []).sort((a, b) => a.date.localeCompare(b.date)));
+      setProfile(prof);
+      setLoading(false);
+    })();
+    return () => { active = false; };
+  }, []));
 
   const today = new Date();
-  const DAY = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][today.getDay()];
-  const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  const monday = getMondayOf(today);
+  const prevMonday = new Date(monday); prevMonday.setDate(prevMonday.getDate() - 7);
+  const todayStr = toDateStr(today);
+
+  // Today's stats
+  const todaySessions = history.filter(s => s.completedAt.slice(0, 10) === todayStr);
+  const todayCals  = todaySessions.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
+  const todayMins  = todaySessions.reduce((s, x) => s + (x.duration || 0), 0);
+  const todayCount = todaySessions.length;
+  const ringProgress = Math.min(todayMins / GOALS.minutes, 1);
+
+  // Streak
+  const streak = computeStreak(history);
+
+  // Chart data
+  const chartData = {
+    calories: buildSessionChartData(history, s => s.caloriesBurned || 0),
+    workouts: buildSessionChartData(history, () => 1),
+    duration: buildSessionChartData(history, s => s.duration || 0),
+    weight:   buildWeightChartData(bodyMetrics),
+  };
+  const currentData = chartData[selectedMetric]?.[timePeriod] || { labels: [], data: [] };
+
+  // Period totals for the big number
+  const periodCals   = sumPeriod(history, timePeriod, s => s.caloriesBurned || 0);
+  const periodWkts   = sumPeriod(history, timePeriod, () => 1);
+  const periodMins   = sumPeriod(history, timePeriod, s => s.duration || 0);
+  const periodWeight = (() => {
+    const filtered = bodyMetrics.filter(m => {
+      if (!m.weight) return false;
+      return sessionInPeriod(m.date + 'T00:00:00', timePeriod, monday, today);
+    });
+    return filtered.length ? filtered[filtered.length - 1].weight : null;
+  })();
+
+  const bigNum = {
+    calories: { value: periodCals.toLocaleString(), unit: 'kcal' },
+    workouts: { value: String(periodWkts), unit: 'sessions' },
+    duration: { value: periodMins.toLocaleString(), unit: 'min' },
+    weight:   { value: periodWeight != null ? String(periodWeight) : '—', unit: 'kg' },
+  }[selectedMetric];
+
+  // Trend vs previous period
+  const trend = (() => {
+    if (selectedMetric === 'weight') return null;
+    const fn = {
+      calories: s => s.caloriesBurned || 0,
+      workouts: () => 1,
+      duration: s => s.duration || 0,
+    }[selectedMetric];
+    return fmtPct(sumPeriod(history, timePeriod, fn), prevPeriodSum(history, timePeriod, fn));
+  })();
+  const trendUp = trend ? !trend.startsWith('-') && !trend.startsWith('−') : true;
+
+  // This week vs last week
+  const thisWeek = history.filter(s => {
+    const diff = Math.floor((new Date(s.completedAt) - monday) / 86400000);
+    return diff >= 0 && diff < 7;
+  });
+  const lastWeek = history.filter(s => {
+    const diff = Math.floor((new Date(s.completedAt) - prevMonday) / 86400000);
+    return diff >= 0 && diff < 7;
+  });
+  const thisWkCount = thisWeek.length;
+  const lastWkCount = lastWeek.length;
+  const thisWkMins  = thisWeek.reduce((s, x) => s + (x.duration || 0), 0);
+  const lastWkMins  = lastWeek.reduce((s, x) => s + (x.duration || 0), 0);
+  const thisWkCals  = thisWeek.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
+  const lastWkCals  = lastWeek.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
+  const thisWkVol   = thisWeek.reduce((s, x) => s + parseVolume(x.exercises), 0);
+  const lastWkVol   = lastWeek.reduce((s, x) => s + parseVolume(x.exercises), 0);
+
+  // User display
+  const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
+  const initials  = profile?.name
+    ? profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
+  const currentMetricObj = METRICS.find(m => m.id === selectedMetric);
+  const DAY = DAY_NAMES[today.getDay()];
+  const MON = MON_NAMES[today.getMonth()];
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.text} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 28 }}>
@@ -146,10 +427,10 @@ const HomeScreen = () => {
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.headerDate}>{DAY}, {MON} {today.getDate()}</Text>
-          <Text style={styles.headerGreeting}>Hey, John</Text>
+          <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
         </View>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>JD</Text>
+          <Text style={styles.avatarText}>{initials}</Text>
         </View>
       </View>
 
@@ -159,18 +440,18 @@ const HomeScreen = () => {
           <View>
             <Text style={styles.heroLabel}>TODAY'S STREAK</Text>
             <View style={styles.heroStreakRow}>
-              <Text style={styles.heroStreakNum}>12</Text>
+              <Text style={styles.heroStreakNum}>{streak}</Text>
               <Text style={styles.heroStreakUnit}> days</Text>
             </View>
           </View>
-          <ActivityRing progress={0.78} />
+          <ActivityRing progress={ringProgress} />
         </View>
         <View style={styles.heroDivider} />
         <View style={styles.heroStatsRow}>
           {[
-            { l: 'Calories', v: '420', sub: '/ 540' },
-            { l: 'Active min', v: '52', sub: '/ 60' },
-            { l: 'Workouts', v: '1', sub: '/ 1' },
+            { l: 'Calories',   v: String(todayCals),  sub: `/ ${GOALS.calories}` },
+            { l: 'Active min', v: String(todayMins),  sub: `/ ${GOALS.minutes}`  },
+            { l: 'Workouts',   v: String(todayCount), sub: `/ ${GOALS.workouts}` },
           ].map((s, i) => (
             <View key={s.l} style={[styles.heroStatItem, i > 0 && { borderLeftWidth: 1, borderLeftColor: 'rgba(88,216,219,0.15)' }]}>
               <Text style={styles.heroStatLabel}>{s.l.toUpperCase()}</Text>
@@ -200,23 +481,25 @@ const HomeScreen = () => {
       <View style={styles.chartCard}>
         <View style={styles.chartCardTop}>
           <View>
-            <Text style={styles.chartCardLabel}>{currentMetric.label.toUpperCase()}</Text>
+            <Text style={styles.chartCardLabel}>{currentMetricObj.label.toUpperCase()}</Text>
             <View style={styles.chartCardValueRow}>
               <Text style={styles.chartCardBigValue}>{bigNum.value}</Text>
               {bigNum.unit ? <Text style={styles.chartCardUnit}> {bigNum.unit}</Text> : null}
             </View>
           </View>
-          <View style={styles.trendBadge}>
-            <Ionicons name="trending-up" size={12} color={Colors.green} />
-            <Text style={styles.trendText}> +8.2%</Text>
-          </View>
+          {trend ? (
+            <View style={[styles.trendBadge, !trendUp && styles.trendBadgeDown]}>
+              <Ionicons name={trendUp ? 'trending-up' : 'trending-down'} size={12} color={trendUp ? Colors.green : Colors.softRed} />
+              <Text style={[styles.trendText, !trendUp && { color: Colors.softRed }]}> {trend}</Text>
+            </View>
+          ) : null}
         </View>
         <AreaChart data={currentData.data} labels={currentData.labels} />
       </View>
 
       {/* Metric selector */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.metricScroll} contentContainerStyle={styles.metricScrollContent}>
-        {metrics.map(m => (
+        {METRICS.map(m => (
           <TouchableOpacity
             key={m.id}
             style={[styles.metricPill, selectedMetric === m.id && styles.metricPillActive]}
@@ -234,10 +517,36 @@ const HomeScreen = () => {
         <Text style={styles.weekSectionTitle}>THIS WEEK</Text>
         <View style={styles.weekGrid}>
           {[
-            { l: 'Workouts',   v: '4',   unit: '',     sub: '+1 vs last',   accent: Colors.text },
-            { l: 'Total time', v: '210', unit: 'min',  sub: '+25 vs last',  accent: Colors.indigo },
-            { l: 'Avg HR',     v: '142', unit: 'bpm',  sub: '-3 vs last',   accent: Colors.softRed },
-            { l: 'Volume',     v: '8.2', unit: 'k kg', sub: '+12% vs last', accent: Colors.green },
+            {
+              l: 'Workouts',
+              v: String(thisWkCount),
+              unit: '',
+              sub: fmtAbsDiff(thisWkCount, lastWkCount),
+              accent: thisWkCount >= lastWkCount ? Colors.text : Colors.softRed,
+            },
+            {
+              l: 'Total time',
+              v: String(thisWkMins),
+              unit: 'min',
+              sub: fmtAbsDiff(thisWkMins, lastWkMins, v => `${Math.round(v)} min`),
+              accent: thisWkMins >= lastWkMins ? Colors.indigo : Colors.softRed,
+            },
+            {
+              l: 'Calories',
+              v: thisWkCals.toLocaleString(),
+              unit: 'kcal',
+              sub: fmtAbsDiff(thisWkCals, lastWkCals, v => Math.round(v).toLocaleString()),
+              accent: thisWkCals >= lastWkCals ? Colors.amber : Colors.softRed,
+            },
+            {
+              l: 'Volume',
+              v: fmtVolume(thisWkVol),
+              unit: 'kg',
+              sub: (thisWkVol === 0 && lastWkVol === 0)
+                ? 'No strength data'
+                : fmtAbsDiff(thisWkVol, lastWkVol, v => fmtVolume(v)),
+              accent: thisWkVol >= lastWkVol ? Colors.green : Colors.softRed,
+            },
           ].map(s => (
             <View key={s.l} style={styles.weekStatCard}>
               <Text style={styles.weekStatLabel}>{s.l}</Text>
@@ -320,7 +629,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(52,211,153,0.12)',
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
+  trendBadgeDown: { backgroundColor: 'rgba(248,113,113,0.12)' },
   trendText: { fontSize: 12, color: Colors.green, fontWeight: '600' },
+  emptyChart: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28, gap: 6 },
+  emptyChartText: { fontSize: 13, color: Colors.gray },
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
   chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
   chartLabelActive: { color: '#FFFFFF', fontWeight: '700' },

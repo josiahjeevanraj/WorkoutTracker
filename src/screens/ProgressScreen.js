@@ -114,10 +114,14 @@ const ProgressScreen = () => {
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [exerciseModalVisible, setExerciseModalVisible] = useState(false);
   const [availableExercises, setAvailableExercises] = useState([]);
-  const [inputModalVisible, setInputModalVisible] = useState(false);
-  const [inputValue, setInputValue] = useState('');
+  const [userStats, setUserStats] = useState({ height: '', bodyFat: '' });
+  const [goals, setGoals] = useState({ targetWeight: '', targetBodyFat: '' });
+  const [statsModalVisible, setStatsModalVisible] = useState(false);
+  const [goalsModalVisible, setGoalsModalVisible] = useState(false);
+  const [statsEdit, setStatsEdit] = useState({ height: '', bodyFat: '' });
+  const [goalsEdit, setGoalsEdit] = useState({ targetWeight: '', targetBodyFat: '' });
 
-  useEffect(() => { loadProgressData(); }, []);
+  useEffect(() => { loadProgressData(); loadProfile(); }, []);
 
   const loadProgressData = async () => {
     const progressData = await StorageService.getProgressData();
@@ -133,6 +137,36 @@ const ProgressScreen = () => {
         exercises: sampleData.exercises,
       });
     }
+  };
+
+  const loadProfile = async () => {
+    const profile = await StorageService.getUserProfile();
+    if (profile) {
+      setUserStats({ height: profile.height?.toString() || '', bodyFat: profile.bodyFat?.toString() || '' });
+      setGoals({ targetWeight: profile.goalWeight?.toString() || '', targetBodyFat: profile.goalBodyFat?.toString() || '' });
+    }
+  };
+
+  const saveStats = async () => {
+    const profile = (await StorageService.getUserProfile()) || {};
+    await StorageService.saveUserProfile({
+      ...profile,
+      height: parseFloat(statsEdit.height) || null,
+      bodyFat: parseFloat(statsEdit.bodyFat) || null,
+    });
+    setUserStats({ height: statsEdit.height, bodyFat: statsEdit.bodyFat });
+    setStatsModalVisible(false);
+  };
+
+  const saveGoals = async () => {
+    const profile = (await StorageService.getUserProfile()) || {};
+    await StorageService.saveUserProfile({
+      ...profile,
+      goalWeight: parseFloat(goalsEdit.targetWeight) || null,
+      goalBodyFat: parseFloat(goalsEdit.targetBodyFat) || null,
+    });
+    setGoals({ targetWeight: goalsEdit.targetWeight, targetBodyFat: goalsEdit.targetBodyFat });
+    setGoalsModalVisible(false);
   };
 
   const generateSampleData = () => {
@@ -507,11 +541,48 @@ const ProgressScreen = () => {
             />
           </View>
 
-          {/* Log button */}
-          <TouchableOpacity style={styles.logBtn} onPress={() => setInputModalVisible(true)}>
-            <Ionicons name="add" size={18} color="#FFFFFF" />
-            <Text style={styles.logBtnText}>Log Today's Data</Text>
-          </TouchableOpacity>
+          {/* Current Stats card */}
+          <View style={styles.statsCard}>
+            <View style={styles.statsCardHeader}>
+              <Text style={styles.statsCardTitle}>CURRENT STATS</Text>
+              <TouchableOpacity onPress={() => { setStatsEdit({ ...userStats }); setStatsModalVisible(true); }}>
+                <Ionicons name="pencil-outline" size={16} color={Colors.gray} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statsRow}>
+              {[
+                { label: 'Weight', value: bodyBigNum !== null ? `${bodyBigNum % 1 === 0 ? bodyBigNum : bodyBigNum.toFixed(1)} kg` : '—' },
+                { label: 'Height', value: userStats.height ? `${userStats.height} cm` : '—' },
+                { label: 'Body Fat', value: userStats.bodyFat ? `${userStats.bodyFat}%` : '—' },
+              ].map(s => (
+                <View key={s.label} style={styles.statItem}>
+                  <Text style={styles.statItemLabel}>{s.label}</Text>
+                  <Text style={styles.statItemValue}>{s.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Goals card */}
+          <View style={styles.statsCard}>
+            <View style={styles.statsCardHeader}>
+              <Text style={styles.statsCardTitle}>GOALS</Text>
+              <TouchableOpacity onPress={() => { setGoalsEdit({ ...goals }); setGoalsModalVisible(true); }}>
+                <Ionicons name="pencil-outline" size={16} color={Colors.gray} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.statsRow}>
+              {[
+                { label: 'Target Weight', value: goals.targetWeight ? `${goals.targetWeight} kg` : '—' },
+                { label: 'Target Body Fat', value: goals.targetBodyFat ? `${goals.targetBodyFat}%` : '—' },
+              ].map(s => (
+                <View key={s.label} style={styles.statItem}>
+                  <Text style={styles.statItemLabel}>{s.label}</Text>
+                  <Text style={styles.statItemValue}>{s.value}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
         </>
       )}
 
@@ -705,42 +776,69 @@ const ProgressScreen = () => {
         </View>
       </Modal>
 
-      {/* ── LOG DATA MODAL ───────────────────────────────────────────────── */}
-      <Modal animationType="slide" transparent visible={inputModalVisible} onRequestClose={() => setInputModalVisible(false)}>
+      {/* ── STATS EDIT MODAL ─────────────────────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={statsModalVisible} onRequestClose={() => setStatsModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => { setInputModalVisible(false); setInputValue(''); }} />
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setStatsModalVisible(false)} />
           <View style={styles.bottomSheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>
-              Log {selectedMetric === 'weight' ? 'Weight' : selectedMetric === 'caloriesBurned' ? 'Calories Burned' : 'Calories Consumed'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder={`Enter value in ${activeBodyMetric?.unit || ''}`}
-              placeholderTextColor={Colors.gray}
-              value={inputValue}
-              onChangeText={setInputValue}
-              keyboardType="numeric"
-              autoFocus
-            />
+            <Text style={styles.sheetTitle}>Current Stats</Text>
+            {[
+              { label: 'Height (cm)', key: 'height', placeholder: 'e.g. 175' },
+              { label: 'Body Fat (%)', key: 'bodyFat', placeholder: 'e.g. 18' },
+            ].map(f => (
+              <View key={f.key} style={{ marginBottom: 12 }}>
+                <Text style={styles.inputLabel}>{f.label}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={f.placeholder}
+                  placeholderTextColor={Colors.gray}
+                  value={statsEdit[f.key]}
+                  onChangeText={v => setStatsEdit(p => ({ ...p, [f.key]: v }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            ))}
             <View style={styles.modalBtns}>
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={() => { setInputModalVisible(false); setInputValue(''); }}
-              >
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setStatsModalVisible(false)}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveBtn}
-                onPress={async () => {
-                  const newEntry = { date: new Date().toISOString(), [selectedMetric]: parseFloat(inputValue) };
-                  const updated = [...bodyData, newEntry];
-                  setBodyData(updated);
-                  await StorageService.saveProgressData({ bodyMetrics: updated });
-                  setInputModalVisible(false);
-                  setInputValue('');
-                }}
-              >
+              <TouchableOpacity style={styles.saveBtn} onPress={saveStats}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── GOALS EDIT MODAL ─────────────────────────────────────────────── */}
+      <Modal animationType="slide" transparent visible={goalsModalVisible} onRequestClose={() => setGoalsModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setGoalsModalVisible(false)} />
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Goals</Text>
+            {[
+              { label: 'Target Weight (kg)', key: 'targetWeight', placeholder: 'e.g. 70' },
+              { label: 'Target Body Fat (%)', key: 'targetBodyFat', placeholder: 'e.g. 15' },
+            ].map(f => (
+              <View key={f.key} style={{ marginBottom: 12 }}>
+                <Text style={styles.inputLabel}>{f.label}</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder={f.placeholder}
+                  placeholderTextColor={Colors.gray}
+                  value={goalsEdit[f.key]}
+                  onChangeText={v => setGoalsEdit(p => ({ ...p, [f.key]: v }))}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+            ))}
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setGoalsModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={saveGoals}>
                 <Text style={styles.saveBtnText}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -835,13 +933,19 @@ const styles = StyleSheet.create({
   emptyChart: { height: 110, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyChartText: { fontSize: 13, color: Colors.gray },
 
-  // Log button
-  logBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    marginHorizontal: 18, paddingVertical: 14, borderRadius: 14,
-    backgroundColor: Colors.primary, gap: 6,
+  // Stats + Goals cards
+  statsCard: {
+    marginHorizontal: 18, marginBottom: 14, padding: 16,
+    backgroundColor: Colors.cardBackground, borderRadius: 16,
+    borderWidth: 1, borderColor: Colors.borderColor,
   },
-  logBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+  statsCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  statsCardTitle: { fontSize: 11, fontWeight: '700', color: Colors.gray, letterSpacing: 0.8 },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  statItem: { alignItems: 'center', gap: 4 },
+  statItemLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
+  statItemValue: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
+  inputLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600', marginBottom: 6 },
 
   // Exercise picker
   exercisePicker: {
