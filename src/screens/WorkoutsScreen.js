@@ -886,10 +886,10 @@ const styles = StyleSheet.create({
 
   // Header
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    flexDirection: 'column', alignItems: 'flex-start',
     paddingHorizontal: 20, paddingBottom: 14,
   },
-  headerTitle: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  headerTitle: { fontSize: 26, fontWeight: '700', color: '#FFFFFF', marginBottom: 12 },
   viewToggle: {
     flexDirection: 'row', backgroundColor: Colors.cardBackground,
     borderRadius: 10, padding: 3,
