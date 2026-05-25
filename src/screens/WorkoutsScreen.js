@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, SectionList, FlatList, TouchableOpacity,
   Modal, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
@@ -195,6 +196,67 @@ const getCategoryInfo = (name = '') => {
     return { color: Colors.amber, label: 'Weighted' };
   return { color: Colors.primary, label: 'Workout' };
 };
+
+// ─── Swipeable set row ────────────────────────────────────────────────────────
+
+const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpdate, onDuplicate, onRemove }) => {
+  const swipeRef = useRef(null);
+  const close = () => swipeRef.current?.close();
+
+  const renderLeftActions = () => (
+    <TouchableOpacity
+      style={styles.swipeDupAction}
+      onPress={() => { close(); onDuplicate(exKey, si, context); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
+      <Text style={styles.swipeActionText}>Dup</Text>
+    </TouchableOpacity>
+  );
+
+  const renderRightActions = canDelete ? () => (
+    <TouchableOpacity
+      style={styles.swipeDelAction}
+      onPress={() => { close(); onRemove(exKey, si, context); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="trash-outline" size={16} color="#FFFFFF" />
+      <Text style={styles.swipeActionText}>Del</Text>
+    </TouchableOpacity>
+  ) : null;
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      renderLeftActions={renderLeftActions}
+      renderRightActions={renderRightActions}
+      overshootLeft={false}
+      overshootRight={false}
+      friction={2}
+    >
+      <View style={styles.inlineSetRow}>
+        <Text style={styles.inlineSetLabel}>Set {si + 1}</Text>
+        <TextInput
+          style={styles.inlineSetInput}
+          value={String(set.weight || '')}
+          onChangeText={v => onUpdate(exKey, si, 'weight', v, context)}
+          placeholder="kg"
+          placeholderTextColor={Colors.gray}
+          keyboardType="decimal-pad"
+        />
+        <Text style={styles.inlineSetX}>×</Text>
+        <TextInput
+          style={styles.inlineSetInput}
+          value={String(set.reps || '')}
+          onChangeText={v => onUpdate(exKey, si, 'reps', v, context)}
+          placeholder="reps"
+          placeholderTextColor={Colors.gray}
+          keyboardType="numeric"
+        />
+      </View>
+    </Swipeable>
+  );
+});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -410,35 +472,19 @@ const WorkoutsScreen = () => {
     const sets = Array.isArray(ex.sets) ? ex.sets : [{ weight: '', reps: '' }];
     return (
       <View style={styles.inlineSetsContainer}>
+        <Text style={styles.swipeHint}>← swipe for actions →</Text>
         {sets.map((set, si) => (
-          <View key={si} style={styles.inlineSetRow}>
-            <Text style={styles.inlineSetLabel}>Set {si + 1}</Text>
-            <TextInput
-              style={styles.inlineSetInput}
-              value={String(set.weight || '')}
-              onChangeText={v => updateSet(ex._key, si, 'weight', v, context)}
-              placeholder="kg"
-              placeholderTextColor={Colors.gray}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.inlineSetX}>×</Text>
-            <TextInput
-              style={styles.inlineSetInput}
-              value={String(set.reps || '')}
-              onChangeText={v => updateSet(ex._key, si, 'reps', v, context)}
-              placeholder="reps"
-              placeholderTextColor={Colors.gray}
-              keyboardType="numeric"
-            />
-            <TouchableOpacity onPress={() => duplicateSet(ex._key, si, context)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="copy-outline" size={16} color={Colors.primary} />
-            </TouchableOpacity>
-            {sets.length > 1 && (
-              <TouchableOpacity onPress={() => removeSet(ex._key, si, context)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="remove-circle" size={18} color={Colors.softRed} />
-              </TouchableOpacity>
-            )}
-          </View>
+          <SwipeableSetRow
+            key={`${ex._key}-${si}`}
+            set={set}
+            si={si}
+            exKey={ex._key}
+            context={context}
+            canDelete={sets.length > 1}
+            onUpdate={updateSet}
+            onDuplicate={duplicateSet}
+            onRemove={removeSet}
+          />
         ))}
         <View style={styles.repsPresetRow}>
           {repsPresets.map(r => (
@@ -966,12 +1012,16 @@ const styles = StyleSheet.create({
   inlinePickerItemText: { fontSize: 14, color: '#FFFFFF' },
 
   inlineSetsContainer: { marginTop: 8 },
-  inlineSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  swipeHint: { fontSize: 10, color: Colors.gray, textAlign: 'center', marginBottom: 6, letterSpacing: 0.4 },
+  inlineSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, backgroundColor: Colors.background, paddingVertical: 6, paddingHorizontal: 4, borderRadius: 8 },
   inlineSetLabel: { fontSize: 12, color: Colors.gray, fontWeight: '600', width: 44 },
   inlineSetInput: { flex: 1, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, fontSize: 14, color: '#FFFFFF', backgroundColor: Colors.background, textAlign: 'center' },
   inlineSetX: { fontSize: 16, color: Colors.gray, fontWeight: '600' },
   inlineAddSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, borderStyle: 'dashed', marginTop: 4 },
   inlineAddSetText: { fontSize: 13, color: Colors.green, fontWeight: '500' },
+  swipeDupAction: { backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
+  swipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
+  swipeActionText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
   logSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
