@@ -211,6 +211,11 @@ const WorkoutsScreen = () => {
   const [exPickerTargetKey, setExPickerTargetKey] = useState(null);
   const [exPickerSearch, setExPickerSearch] = useState('');
   const [exPickerContext, setExPickerContext] = useState('log'); // 'log' | 'edit'
+  const [setsModalVisible, setSetsModalVisible] = useState(false);
+  const [setsModalExName, setSetsModalExName] = useState('');
+  const [setsModalTargetKey, setSetsModalTargetKey] = useState(null);
+  const [setsModalContext, setSetsModalContext] = useState('log');
+  const [setsModalSets, setSetsModalSets] = useState([{ weight: '', reps: '' }]);
 
   useEffect(() => { loadHistory(true); }, []);
 
@@ -271,7 +276,7 @@ const WorkoutsScreen = () => {
   const cancelEdit = () => { setEditMode(false); setEditedSession(null); };
 
   const handleSaveEdit = async () => {
-    const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ({ ...ex, sets: parseInt(ex.sets) || ex.sets }));
+    const cleanExercises = (editedSession.exercises || []).map(({ _key, setsData, ...ex }) => ({ ...ex, sets: parseInt(ex.sets) || ex.sets }));
     const updates = { name: editedSession.name?.trim() || selectedSession.name, exercises: cleanExercises, exerciseCount: cleanExercises.length };
     const updated = await StorageService.updateWorkoutSession(editedSession.id, updates);
     if (updated) { setSelectedSession(updated); await loadHistory(); }
@@ -285,6 +290,48 @@ const WorkoutsScreen = () => {
   const addExercise = () =>
     setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: '3', reps: '10', weight: '', _key: Date.now().toString() }] }));
 
+  const repsPresets = ['6', '8', '10', '12', '15', '20'];
+
+  const openSetsModal = (exName, targetKey, context, currentEx) => {
+    setSetsModalExName(exName);
+    setSetsModalTargetKey(targetKey);
+    setSetsModalContext(context);
+    if (currentEx?.setsData?.length > 0) {
+      setSetsModalSets(currentEx.setsData.map(s => ({ weight: s.weight || '', reps: String(s.reps || '') })));
+    } else {
+      setSetsModalSets([{ weight: '', reps: '' }]);
+    }
+    setSetsModalVisible(true);
+  };
+
+  const updateSetsModalSet = (idx, field, value) =>
+    setSetsModalSets(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+
+  const addSetsModalSet = () =>
+    setSetsModalSets(prev => [...prev, { weight: prev[prev.length - 1]?.weight || '', reps: '' }]);
+
+  const removeSetsModalSet = (idx) =>
+    setSetsModalSets(prev => prev.filter((_, i) => i !== idx));
+
+  const confirmSetsModal = () => {
+    const setsData = setsModalSets;
+    const setCount = setsData.length;
+    const firstSet = setsData[0] || { weight: '', reps: '' };
+    const allSameReps = setsData.every(s => s.reps === firstSet.reps);
+    const repsDisplay = allSameReps ? (firstSet.reps || '10') : setsData.map(s => s.reps).join('/');
+    const weightDisplay = firstSet.weight || '';
+    const update = { sets: setCount, reps: repsDisplay, weight: weightDisplay, setsData };
+    if (setsModalContext === 'edit') {
+      setEditedSession(prev => ({
+        ...prev,
+        exercises: prev.exercises.map(ex => ex._key === setsModalTargetKey ? { ...ex, ...update } : ex),
+      }));
+    } else {
+      setLogExercises(prev => prev.map(ex => ex._key === setsModalTargetKey ? { ...ex, ...update } : ex));
+    }
+    setSetsModalVisible(false);
+  };
+
   const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); };
   const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
   const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: '3', reps: '10', _key: Date.now().toString() }]);
@@ -293,7 +340,7 @@ const WorkoutsScreen = () => {
 
   const handleLogWorkout = async () => {
     if (!selectedWorkout) { Alert.alert('Select a workout', 'Please choose a category and workout first'); return; }
-    const cleanExercises = logExercises.filter(ex => ex.name.trim()).map(({ _key, ...ex }) => ({ ...ex, sets: parseInt(ex.sets) || ex.sets, weight: '' }));
+    const cleanExercises = logExercises.filter(ex => ex.name.trim()).map(({ _key, setsData, ...ex }) => ({ ...ex, sets: parseInt(ex.sets) || ex.sets }));
     await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: '' });
     await loadHistory();
     closeLogModal();
@@ -499,12 +546,19 @@ const WorkoutsScreen = () => {
                             <Ionicons name="close-circle" size={20} color={Colors.error} />
                           </TouchableOpacity>
                         </TouchableOpacity>
-                        <View style={styles.editExerciseStatsRow}>
-                          <TextInput style={[styles.editInput, styles.editSmallInput]} value={String(ex.sets)} onChangeText={text => updateExercise(ex._key, 'sets', text)} placeholder="Sets" placeholderTextColor={Colors.gray} keyboardType="numeric" />
-                          <Text style={styles.editSeparator}>×</Text>
-                          <TextInput style={[styles.editInput, styles.editSmallInput]} value={String(ex.reps)} onChangeText={text => updateExercise(ex._key, 'reps', text)} placeholder="Reps" placeholderTextColor={Colors.gray} />
-                          <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.weight === '-' ? '' : (ex.weight || '')} onChangeText={text => updateExercise(ex._key, 'weight', text)} placeholder="kg" placeholderTextColor={Colors.gray} />
-                        </View>
+                        <TouchableOpacity
+                          style={styles.setsSummaryRow}
+                          onPress={() => openSetsModal(ex.name || 'Exercise', ex._key, 'edit', ex)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="list-outline" size={15} color={Colors.gray} />
+                          <Text style={styles.setsSummaryText}>
+                            {ex.sets && ex.reps
+                              ? `${ex.sets} set${Number(ex.sets) !== 1 ? 's' : ''} · ${ex.reps} reps${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`
+                              : 'Tap to add sets & reps'}
+                          </Text>
+                          <Ionicons name="chevron-forward" size={15} color={Colors.gray} />
+                        </TouchableOpacity>
                       </View>
                     ))}
                     <TouchableOpacity style={styles.addExerciseBtn} onPress={addExercise}>
@@ -588,12 +642,19 @@ const WorkoutsScreen = () => {
                           <Ionicons name="close-circle" size={20} color={Colors.error} />
                         </TouchableOpacity>
                       </TouchableOpacity>
-                      <View style={styles.editExerciseStatsRow}>
-                        <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.sets} onChangeText={text => updateLogExercise(ex._key, 'sets', text)} placeholder="Sets" placeholderTextColor={Colors.gray} keyboardType="numeric" />
-                        <Text style={styles.editSeparator}>×</Text>
-                        <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.reps} onChangeText={text => updateLogExercise(ex._key, 'reps', text)} placeholder="Reps" placeholderTextColor={Colors.gray} />
-                        <TextInput style={[styles.editInput, styles.editSmallInput]} value={ex.weight} onChangeText={text => updateLogExercise(ex._key, 'weight', text)} placeholder="kg" placeholderTextColor={Colors.gray} />
-                      </View>
+                      <TouchableOpacity
+                        style={styles.setsSummaryRow}
+                        onPress={() => openSetsModal(ex.name || 'Exercise', ex._key, 'log', ex)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="list-outline" size={15} color={Colors.gray} />
+                        <Text style={styles.setsSummaryText}>
+                          {ex.sets && ex.reps
+                            ? `${ex.sets} set${Number(ex.sets) !== 1 ? 's' : ''} · ${ex.reps} reps${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`
+                            : 'Tap to add sets & reps'}
+                        </Text>
+                        <Ionicons name="chevron-forward" size={15} color={Colors.gray} />
+                      </TouchableOpacity>
                     </View>
                   ))}
                   <TouchableOpacity style={styles.addExerciseBtn} onPress={addLogExercise}>
@@ -613,6 +674,72 @@ const WorkoutsScreen = () => {
               </View>
 
             </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── Sets Modal ──────────────────────────────────────────────────────── */}
+      <Modal visible={setsModalVisible} transparent animationType="slide" onRequestClose={() => setSetsModalVisible(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.setsModal}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.setsModalTitle} numberOfLines={2}>{setsModalExName}</Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ maxHeight: 400 }}>
+              {setsModalSets.map((set, idx) => (
+                <View key={idx} style={styles.setRow}>
+                  <View style={styles.setRowHeader}>
+                    <Text style={styles.setLabel}>Set {idx + 1}</Text>
+                    {setsModalSets.length > 1 && (
+                      <TouchableOpacity onPress={() => removeSetsModalSet(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="remove-circle" size={20} color={Colors.softRed} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <View style={styles.setInputsRow}>
+                    <TextInput
+                      style={styles.setInput}
+                      value={set.weight}
+                      onChangeText={v => updateSetsModalSet(idx, 'weight', v)}
+                      placeholder="kg"
+                      placeholderTextColor={Colors.gray}
+                      keyboardType="decimal-pad"
+                    />
+                    <Text style={styles.setMultiply}>×</Text>
+                    <TextInput
+                      style={styles.setInput}
+                      value={set.reps}
+                      onChangeText={v => updateSetsModalSet(idx, 'reps', v)}
+                      placeholder="reps"
+                      placeholderTextColor={Colors.gray}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={styles.repsPresetRow}>
+                    {repsPresets.map(r => (
+                      <TouchableOpacity
+                        key={r}
+                        style={[styles.presetBtn, set.reps === r && styles.presetBtnActive]}
+                        onPress={() => updateSetsModalSet(idx, 'reps', r)}
+                      >
+                        <Text style={[styles.presetText, set.reps === r && styles.presetTextActive]}>{r}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              ))}
+              <TouchableOpacity style={styles.addSetBtn} onPress={addSetsModalSet}>
+                <Ionicons name="add-circle-outline" size={18} color={Colors.green} />
+                <Text style={styles.addSetText}>Add Set</Text>
+              </TouchableOpacity>
+            </ScrollView>
+            <View style={[styles.modalButtons, { marginTop: 12 }]}>
+              <TouchableOpacity style={[styles.modalButton, styles.cancelBtn]} onPress={() => setSetsModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.saveBtn]} onPress={confirmSetsModal}>
+                <Text style={styles.saveBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -662,6 +789,11 @@ const WorkoutsScreen = () => {
                     updateLogExercise(exPickerTargetKey, 'name', item);
                   }
                   setExPickerVisible(false);
+                  setSetsModalExName(item);
+                  setSetsModalTargetKey(exPickerTargetKey);
+                  setSetsModalContext(exPickerContext);
+                  setSetsModalSets([{ weight: '', reps: '' }]);
+                  setSetsModalVisible(true);
                 }}
                 activeOpacity={0.7}
               >
@@ -788,6 +920,25 @@ const styles = StyleSheet.create({
   exerciseMeta: { fontSize: 14, color: Colors.gray },
   notesText: { fontSize: 15, color: Colors.gray, lineHeight: 22 },
   noExercisesText: { color: Colors.gray, fontSize: 14, fontStyle: 'italic' },
+
+  // Sets modal
+  setsModal: { backgroundColor: Colors.cardBackground, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderColor: Colors.borderColor },
+  setsModalTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 20, textAlign: 'center' },
+  setRow: { backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderColor },
+  setRowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  setLabel: { fontSize: 12, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.6 },
+  setInputsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  setInput: { flex: 1, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, padding: 10, fontSize: 15, backgroundColor: Colors.cardBackground, color: '#FFFFFF', textAlign: 'center' },
+  setMultiply: { fontSize: 18, color: Colors.gray, fontWeight: '600' },
+  repsPresetRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  presetBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
+  presetBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  presetText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
+  presetTextActive: { color: '#FFFFFF', fontWeight: '700' },
+  addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10, borderStyle: 'dashed', marginTop: 4, marginBottom: 12 },
+  addSetText: { color: Colors.green, fontSize: 14, fontWeight: '500' },
+  setsSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
+  setsSummaryText: { flex: 1, fontSize: 14, color: Colors.gray },
 
   editExerciseBlock: { backgroundColor: Colors.background, borderRadius: 10, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderColor },
   editExerciseNameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
