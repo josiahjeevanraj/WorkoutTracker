@@ -141,9 +141,6 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
   };
 
   const saveData = () => {
-    if (!editingData.caloriesConsumed || !editingData.caloriesBurned) {
-      Alert.alert('Missing Data', 'Please enter calories consumed and burned.'); return;
-    }
     setFitnessData(prev => ({
       ...prev,
       [selectedDate]: {
@@ -304,6 +301,19 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
         </View>
         )}
 
+        {/* Manual workouts from fitness data */}
+        {dayData?.workouts?.length > 0 && (
+          <View style={[s.sessionsCard, { borderColor: Colors.borderColor, marginBottom: 12 }]}>
+            <Text style={s.sessionsTitle}>WORKOUTS</Text>
+            {dayData.workouts.map((w, i) => (
+              <View key={i} style={[s.sessionRow, i > 0 && { borderTopWidth: 1, borderTopColor: Colors.borderColor }]}>
+                <View style={[s.sessionStripe, { backgroundColor: getWorkoutColor(w) }]} />
+                <Text style={[s.sessionName, { flex: 1 }]} numberOfLines={2}>{w}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Sessions from workout history */}
         {daySessions.length > 0 && (
           <View style={[s.sessionsCard, { borderColor: Colors.borderColor }]}>
@@ -339,7 +349,9 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
                           <View style={[s.exDot, { backgroundColor: getWorkoutColor(session.name || '') }]} />
                           <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
                           <Text style={s.exMeta}>
-                            {ex.sets}×{ex.reps}{ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}
+                            {Array.isArray(ex.sets)
+                              ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}kg` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
+                              : `${ex.sets}×${ex.reps}${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`}
                           </Text>
                         </View>
                       ))}
@@ -360,12 +372,52 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
   };
 
   // ─── Edit form ───────────────────────────────────────────────────────────────
-  const renderEditForm = () => (
+  const renderEditForm = () => {
+    const daySessions = sessionsByDate[selectedDate] || [];
+    return (
     <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       <View style={s.editHeader}>
         <Text style={s.editTitle}>Edit {friendlyDate(selectedDate)}</Text>
         <TouchableOpacity onPress={cancelEditing}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
       </View>
+
+      {daySessions.length > 0 && (
+        <View style={[s.sessionsCard, { marginBottom: 20 }]}>
+          <Text style={s.sessionsTitle}>SESSIONS</Text>
+          {daySessions.map((session, i) => {
+            const exercises = session.exercises || [];
+            return (
+              <View key={session.id || i} style={i > 0 && { borderTopWidth: 1, borderTopColor: Colors.borderColor }}>
+                <View style={s.sessionRow}>
+                  <View style={[s.sessionStripe, { backgroundColor: getWorkoutColor(session.name || '') }]} />
+                  <View style={s.sessionInfo}>
+                    <Text style={s.sessionName} numberOfLines={1}>{session.name}</Text>
+                    <Text style={s.sessionSubText}>
+                      {exercises.length > 0 ? `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''}` : 'No exercises'}
+                      {session.duration > 0 ? ` · ${session.duration} min` : ''}
+                    </Text>
+                  </View>
+                </View>
+                {exercises.length > 0 && (
+                  <View style={s.exerciseList}>
+                    {exercises.map((ex, ei) => (
+                      <View key={ei} style={s.exerciseItem}>
+                        <View style={[s.exDot, { backgroundColor: getWorkoutColor(session.name || '') }]} />
+                        <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
+                        <Text style={s.exMeta}>
+                          {Array.isArray(ex.sets)
+                            ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}kg` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
+                            : `${ex.sets}×${ex.reps}${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {[
         { label: 'Calories Consumed', field: 'caloriesConsumed', placeholder: 'e.g. 2200', keyboard: 'numeric' },
@@ -421,6 +473,7 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
       {renderStrengthModal()}
     </ScrollView>
   );
+  };
 
   const renderWorkoutSelector = () => {
     const filtered = getFilteredWorkouts();
