@@ -572,7 +572,7 @@ const WorkoutsScreen = () => {
           </TouchableOpacity>
         </>
       ) : (
-        <CalendarScreen embedded sessions={history} />
+        <CalendarScreen embedded sessions={history} onEditSession={enterEditMode} onSessionDeleted={() => loadHistory()} />
       )}
 
       {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
