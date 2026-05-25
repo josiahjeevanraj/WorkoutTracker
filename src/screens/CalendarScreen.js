@@ -790,13 +790,13 @@ const s = StyleSheet.create({
   // Day content
   dayContent: { paddingHorizontal: 20, paddingTop: 2 },
 
-  noDataContainer: { alignItems: 'center', paddingVertical: 50 },
+  noDataContainer: { alignItems: 'center', paddingVertical: 16 },
   noDataText: { fontSize: 15, color: Colors.gray, marginTop: 12, textAlign: 'center' },
   addDataBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, marginTop: 20 },
   addDataBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
 
   // Day detail
-  dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  dayHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   dayTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   daySubtitle: { fontSize: 11, color: Colors.gray, marginTop: 2 },
   editIconBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: Colors.cardBackground, borderWidth: 1, borderColor: Colors.borderColor, justifyContent: 'center', alignItems: 'center' },
