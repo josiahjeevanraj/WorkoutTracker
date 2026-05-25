@@ -572,10 +572,9 @@ const WorkoutsScreen = () => {
       )}
 
       {/* ── Detail Modal ────────────────────────────────────────────────────── */}
-      <Modal visible={!!selectedSession} animationType="slide" transparent onRequestClose={editMode ? cancelEdit : closeDetail}>
+      <Modal visible={!!selectedSession} animationType="fade" transparent onRequestClose={editMode ? cancelEdit : closeDetail}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.detailModal}>
-            <View style={styles.modalHandle} />
 
             {/* Header — outside ScrollView so touches always register */}
             <View style={styles.detailHeader}>
@@ -735,10 +734,9 @@ const WorkoutsScreen = () => {
       </Modal>
 
       {/* ── Log Workout Modal ────────────────────────────────────────────────── */}
-      <Modal visible={logModalVisible} animationType="slide" transparent onRequestClose={closeLogModal}>
+      <Modal visible={logModalVisible} animationType="fade" transparent onRequestClose={closeLogModal}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.logModal}>
-            <View style={styles.modalHandle} />
             <Text style={styles.modalTitle}>Log Workout</Text>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
@@ -930,10 +928,9 @@ const styles = StyleSheet.create({
   fabText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 
   // Modals
-  modalOverlay: { flex: 1, backgroundColor: Colors.modalBackground, justifyContent: 'flex-end' },
-  detailModal: { backgroundColor: Colors.cardBackground, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '85%', borderWidth: 1, borderColor: Colors.borderColor },
-  logModal: { backgroundColor: Colors.cardBackground, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderColor: Colors.borderColor },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.darkGray, alignSelf: 'center', marginBottom: 16 },
+  modalOverlay: { flex: 1, backgroundColor: Colors.modalBackground, justifyContent: 'center', paddingHorizontal: 20 },
+  detailModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 24, maxHeight: '88%', borderWidth: 1, borderColor: Colors.borderColor },
+  logModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 24, maxHeight: '90%', borderWidth: 1, borderColor: Colors.borderColor },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 20, textAlign: 'center' },
 
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
