@@ -792,7 +792,7 @@ const s = StyleSheet.create({
   legendDot: { width: 12, height: 12, borderRadius: 3 },
 
   // Day content
-  dayContent: { paddingHorizontal: 20, paddingTop: 2 },
+  dayContent: { paddingHorizontal: 20, paddingTop: 12 },
 
   noDataContainer: { alignItems: 'center', paddingVertical: 16 },
   noDataText: { fontSize: 15, color: Colors.gray, marginTop: 12, textAlign: 'center' },
