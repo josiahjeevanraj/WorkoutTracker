@@ -289,6 +289,7 @@ const WorkoutsScreen = () => {
   const [activeView, setActiveView] = useState('list');
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
+  const [expandedNotes, setExpandedNotes] = useState('');
   const [containerHeight, setContainerHeight] = useState(SCREEN_H);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
@@ -340,6 +341,7 @@ const WorkoutsScreen = () => {
     if (!ref) return;
     ref.measure((x, y, width, height, pageX, pageY) => {
       setExpandedCard({ session, rect: { x: pageX, y: pageY, width, height } });
+      setExpandedNotes(session.notes || '');
       expandAnim.setValue(0);
       Animated.spring(expandAnim, { toValue: 1, useNativeDriver: false, tension: 55, friction: 11 }).start();
     });
@@ -348,6 +350,13 @@ const WorkoutsScreen = () => {
   const closeExpansion = () => {
     Animated.spring(expandAnim, { toValue: 0, useNativeDriver: false, tension: 65, friction: 12 })
       .start(() => setExpandedCard(null));
+  };
+
+  const saveExpandedNotes = async (notes) => {
+    const id = expandedCard?.session?.id;
+    if (!id) return;
+    await StorageService.updateWorkoutSession(id, { notes });
+    setHistory(prev => prev.map(s => s.id === id ? { ...s, notes } : s));
   };
 
   const enterEditMode = (session) => {
@@ -729,12 +738,19 @@ const WorkoutsScreen = () => {
                       ))}
                     </View>
                   ))}
-                  {!!session.notes && (
-                    <View style={styles.expandNotesBlock}>
-                      <Text style={styles.expandNotesLabel}>Notes</Text>
-                      <Text style={styles.expandNotes}>{session.notes}</Text>
-                    </View>
-                  )}
+                  <View style={styles.expandNotesBlock}>
+                    <Text style={styles.expandNotesLabel}>Notes</Text>
+                    <TextInput
+                      style={styles.expandNotesInput}
+                      value={expandedNotes}
+                      onChangeText={setExpandedNotes}
+                      onBlur={() => saveExpandedNotes(expandedNotes)}
+                      placeholder="Add notes..."
+                      placeholderTextColor={Colors.gray}
+                      multiline
+                      textAlignVertical="top"
+                    />
+                  </View>
                 </ScrollView>
 
                 {/* Actions */}
@@ -977,6 +993,7 @@ const styles = StyleSheet.create({
   expandNotesBlock: { marginTop: 20, padding: 14, backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandNotesLabel: { fontSize: 11, color: Colors.gray, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  expandNotesInput: { fontSize: 14, color: '#FFFFFF', lineHeight: 20, minHeight: 60 },
   expandActions: { flexDirection: 'row', gap: 12, padding: 20, paddingBottom: 40, borderTopWidth: 1, borderTopColor: Colors.borderColor },
   expandDeleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
