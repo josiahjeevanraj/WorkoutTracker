@@ -596,9 +596,12 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
               <Text key={i} style={s.calDayHeader}>{d}</Text>
             ))}
           </View>
-          {Array.from({ length: Math.ceil(grid.length / 7) }, (_, ri) => (
+          {Array.from({ length: Math.ceil(grid.length / 7) }, (_, ri) => {
+            const rowCells = grid.slice(ri * 7, ri * 7 + 7);
+            while (rowCells.length < 7) rowCells.push(null);
+            return (
             <View key={ri} style={s.calRow}>
-              {grid.slice(ri * 7, ri * 7 + 7).map((day, di) => {
+              {rowCells.map((day, di) => {
                 if (!day) return <View key={di} style={s.calCell} />;
                 const dateKey = toDateKey(currentYear, currentMonth, day);
                 const intensity = getIntensity(dateKey);
@@ -627,7 +630,8 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
                 );
               })}
             </View>
-          ))}
+            );
+          })}
         </View>
 
         {/* Day content */}
@@ -777,7 +781,7 @@ const s = StyleSheet.create({
   calDayHeader: { flex: 1, textAlign: 'center', fontSize: 10, color: Colors.gray, fontWeight: '600' },
   calRow: { flexDirection: 'row', marginBottom: 2 },
   calCell: {
-    flex: 1, aspectRatio: 1,
+    width: '14.285714%', aspectRatio: 1,
     borderRadius: 10, justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
   },
