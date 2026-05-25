@@ -596,37 +596,38 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
               <Text key={i} style={s.calDayHeader}>{d}</Text>
             ))}
           </View>
-          <View style={s.calCells}>
-            {grid.map((day, i) => {
-              if (!day) return <View key={i} style={s.calCell} />;
-              const dateKey = toDateKey(currentYear, currentMonth, day);
-              const intensity = getIntensity(dateKey);
-              const isSelected = dateKey === selectedDate;
-              const isToday = dateKey === todayKey;
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    s.calCell,
-                    { backgroundColor: isSelected ? 'transparent' : heatColor(intensity) },
-                    isSelected && { borderWidth: 2, borderColor: Colors.text },
-                    isToday && !isSelected && { borderWidth: 1, borderColor: 'rgba(88,216,219,0.5)' },
-                  ]}
-                  onPress={() => { setSelectedDate(dateKey); setIsEditing(false); }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[
-                    s.calCellText,
-                    { color: intensity >= 3 && !isSelected ? '#0B1220' : isSelected ? Colors.text : Colors.textSecondary },
-                    (intensity >= 3 || isSelected) && { fontWeight: '700' },
-                  ]}>
-                    {day}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
+          {Array.from({ length: Math.ceil(grid.length / 7) }, (_, ri) => (
+            <View key={ri} style={s.calRow}>
+              {grid.slice(ri * 7, ri * 7 + 7).map((day, di) => {
+                if (!day) return <View key={di} style={s.calCell} />;
+                const dateKey = toDateKey(currentYear, currentMonth, day);
+                const intensity = getIntensity(dateKey);
+                const isSelected = dateKey === selectedDate;
+                const isToday = dateKey === todayKey;
+                return (
+                  <TouchableOpacity
+                    key={di}
+                    style={[
+                      s.calCell,
+                      { backgroundColor: isSelected ? 'transparent' : heatColor(intensity) },
+                      isSelected && { borderWidth: 2, borderColor: Colors.text },
+                      isToday && !isSelected && { borderWidth: 1, borderColor: 'rgba(88,216,219,0.5)' },
+                    ]}
+                    onPress={() => { setSelectedDate(dateKey); setIsEditing(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      s.calCellText,
+                      { color: intensity >= 3 && !isSelected ? '#0B1220' : isSelected ? Colors.text : Colors.textSecondary },
+                      (intensity >= 3 || isSelected) && { fontWeight: '700' },
+                    ]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
         </View>
 
         {/* Day content */}
@@ -774,12 +775,11 @@ const s = StyleSheet.create({
   calGrid: { marginHorizontal: 18, marginBottom: 0 },
   calDayHeaders: { flexDirection: 'row', marginBottom: 6 },
   calDayHeader: { flex: 1, textAlign: 'center', fontSize: 10, color: Colors.gray, fontWeight: '600' },
-  calCells: { flexDirection: 'row', flexWrap: 'wrap' },
+  calRow: { flexDirection: 'row', marginBottom: 2 },
   calCell: {
-    width: '14.285714%', aspectRatio: 1,
+    flex: 1, aspectRatio: 1,
     borderRadius: 10, justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
-    marginBottom: 2,
   },
   calCellText: { fontSize: 12, fontWeight: '500' },
 
