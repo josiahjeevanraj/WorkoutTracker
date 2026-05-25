@@ -272,6 +272,64 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpda
   );
 });
 
+// ─── Swipeable session card ───────────────────────────────────────────────────
+
+const SwipeableSessionCard = React.memo(({ item, cardRef, onPress, onDuplicate, onDelete }) => {
+  const swipeRef = useRef(null);
+  const close = () => swipeRef.current?.close();
+  const hasPR = item.notes?.toLowerCase().includes('pr');
+  const exCount = item.exerciseCount || item.exercises?.length || 0;
+
+  const renderLeftActions = () => (
+    <TouchableOpacity
+      style={styles.sessionSwipeDupAction}
+      onPress={() => { close(); onDuplicate(item); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
+      <Text style={styles.swipeActionText}>Dup</Text>
+    </TouchableOpacity>
+  );
+
+  const renderRightActions = () => (
+    <TouchableOpacity
+      style={styles.sessionSwipeDelAction}
+      onPress={() => { close(); onDelete(item.id); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+      <Text style={styles.swipeActionText}>Del</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      renderLeftActions={renderLeftActions}
+      renderRightActions={renderRightActions}
+      overshootLeft={false}
+      overshootRight={false}
+      friction={2}
+    >
+      <TouchableOpacity
+        ref={cardRef}
+        style={styles.sessionCard}
+        onPress={() => onPress(item, item.id)}
+        activeOpacity={0.88}
+      >
+        <View style={styles.cardTopRow}>
+          <Text style={styles.cardTime}>{formatTime(item.completedAt)}</Text>
+          {hasPR && <View style={styles.prBadge}><Text style={styles.prBadgeText}>NEW PR</Text></View>}
+        </View>
+        <Text style={styles.sessionName}>{item.name}</Text>
+        {exCount > 0 && (
+          <Text style={styles.cardExCount}>{exCount} exercise{exCount !== 1 ? 's' : ''}</Text>
+        )}
+      </TouchableOpacity>
+    </Swipeable>
+  );
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const WorkoutsScreen = () => {
@@ -291,6 +349,7 @@ const WorkoutsScreen = () => {
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
   const [expandedNotes, setExpandedNotes] = useState('');
   const expandedNotesRef = useRef('');
+  const [logTargetDate, setLogTargetDate] = useState(null);
   const [containerHeight, setContainerHeight] = useState(SCREEN_H);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
@@ -374,6 +433,18 @@ const WorkoutsScreen = () => {
     setEditMode(false); setEditedSession(null); setSelectedSession(null);
   };
 
+  const handleDeleteSession = async (id) => {
+    await StorageService.deleteWorkoutSession(id);
+    setHistory(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleDuplicateSession = async (session) => {
+    const { id, ...rest } = session;
+    const origTime = new Date(session.completedAt).getTime();
+    const newSession = await StorageService.addWorkoutSession({ ...rest, completedAt: new Date(origTime + 1000).toISOString() });
+    if (newSession) await loadHistory();
+  };
+
   const handleDeleteFromExpansion = () => {
     Alert.alert('Delete Workout', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -437,7 +508,7 @@ const WorkoutsScreen = () => {
       : setEditedSession(prev => ({ ...prev, exercises: updater(prev.exercises) }));
   };
 
-  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); };
+  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); setLogTargetDate(null); };
   const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
   const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '' }], _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
@@ -446,7 +517,10 @@ const WorkoutsScreen = () => {
   const handleLogWorkout = async () => {
     if (!selectedWorkout) { Alert.alert('Select a workout', 'Please choose a category and workout first'); return; }
     const cleanExercises = logExercises.filter(ex => ex.name.trim()).map(({ _key, ...ex }) => ex);
-    await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: logNotes.trim() });
+    const completedAt = logTargetDate
+      ? new Date(logTargetDate + 'T12:00:00').toISOString()
+      : new Date().toISOString();
+    await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: logNotes.trim(), completedAt });
     await loadHistory();
     closeLogModal();
   };
@@ -465,27 +539,15 @@ const WorkoutsScreen = () => {
     );
   };
 
-  const renderItem = ({ item }) => {
-    const hasPR = item.notes?.toLowerCase().includes('pr');
-    const exCount = item.exerciseCount || item.exercises?.length || 0;
-    return (
-      <TouchableOpacity
-        ref={ref => { cardRefs.current[item.id] = ref; }}
-        style={styles.sessionCard}
-        onPress={() => openCard(item, item.id)}
-        activeOpacity={0.88}
-      >
-        <View style={styles.cardTopRow}>
-          <Text style={styles.cardTime}>{formatTime(item.completedAt)}</Text>
-          {hasPR && <View style={styles.prBadge}><Text style={styles.prBadgeText}>NEW PR</Text></View>}
-        </View>
-        <Text style={styles.sessionName}>{item.name}</Text>
-        {exCount > 0 && (
-          <Text style={styles.cardExCount}>{exCount} exercise{exCount !== 1 ? 's' : ''}</Text>
-        )}
-      </TouchableOpacity>
-    );
-  };
+  const renderItem = ({ item }) => (
+    <SwipeableSessionCard
+      item={item}
+      cardRef={ref => { cardRefs.current[item.id] = ref; }}
+      onPress={openCard}
+      onDuplicate={handleDuplicateSession}
+      onDelete={handleDeleteSession}
+    />
+  );
 
   const renderInlineSets = (ex, context) => {
     const sets = Array.isArray(ex.sets) ? ex.sets : [{ weight: '', reps: '' }];
@@ -563,7 +625,7 @@ const WorkoutsScreen = () => {
           </TouchableOpacity>
         </>
       ) : (
-        <CalendarScreen embedded sessions={history} onEditSession={enterEditMode} onSessionDeleted={() => loadHistory()} />
+        <CalendarScreen embedded sessions={history} onEditSession={enterEditMode} onSessionDeleted={() => loadHistory()} onLogWorkout={(date) => { setLogTargetDate(date); setLogModalVisible(true); }} />
       )}
 
       {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
@@ -1052,6 +1114,8 @@ const styles = StyleSheet.create({
   swipeDupAction: { backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
   swipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
   swipeActionText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  sessionSwipeDupAction: { backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', width: 72, borderRadius: 14, marginBottom: 10, gap: 4 },
+  sessionSwipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 72, borderRadius: 14, marginBottom: 10, gap: 4 },
 
   logSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },

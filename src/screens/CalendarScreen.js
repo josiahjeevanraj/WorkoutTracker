@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Animated, Dimensions,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 import { Ionicons } from '@expo/vector-icons';
@@ -53,9 +54,67 @@ const getWorkoutColor = (workout = '') => {
   return Colors.primary;
 };
 
+// ─── Swipeable calendar session card ─────────────────────────────────────────
+
+const SwipeableCalSessionCard = React.memo(({ session, cardRef, onPress, onDuplicate, onDelete }) => {
+  const swipeRef = useRef(null);
+  const close = () => swipeRef.current?.close();
+  const hasPR = session.notes?.toLowerCase().includes('pr');
+  const exCount = session.exerciseCount || session.exercises?.length || 0;
+
+  const renderLeftActions = () => (
+    <TouchableOpacity
+      style={s.sessionSwipeDupAction}
+      onPress={() => { close(); onDuplicate(session); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
+      <Text style={s.swipeActionText}>Dup</Text>
+    </TouchableOpacity>
+  );
+
+  const renderRightActions = () => (
+    <TouchableOpacity
+      style={s.sessionSwipeDelAction}
+      onPress={() => { close(); onDelete(session.id); }}
+      activeOpacity={0.85}
+    >
+      <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+      <Text style={s.swipeActionText}>Del</Text>
+    </TouchableOpacity>
+  );
+
+  return (
+    <Swipeable
+      ref={swipeRef}
+      renderLeftActions={renderLeftActions}
+      renderRightActions={renderRightActions}
+      overshootLeft={false}
+      overshootRight={false}
+      friction={2}
+    >
+      <TouchableOpacity
+        ref={cardRef}
+        style={s.sessionCard}
+        onPress={() => onPress(session, session.id)}
+        activeOpacity={0.88}
+      >
+        <View style={s.cardTopRow}>
+          <Text style={s.cardTime}>{formatTime(session.completedAt)}</Text>
+          {hasPR && <View style={s.prBadge}><Text style={s.prBadgeText}>NEW PR</Text></View>}
+        </View>
+        <Text style={s.sessionCardName}>{session.name}</Text>
+        {exCount > 0 && (
+          <Text style={s.cardExCount}>{exCount} exercise{exCount !== 1 ? 's' : ''}</Text>
+        )}
+      </TouchableOpacity>
+    </Swipeable>
+  );
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSessionDeleted }) => {
+const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSessionDeleted, onLogWorkout }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editingData, setEditingData] = useState({ caloriesConsumed: '', caloriesBurned: '', weight: '', workouts: [] });
@@ -275,6 +334,18 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
     ]);
   };
 
+  const handleDeleteSession = async (id) => {
+    await StorageService.deleteWorkoutSession(id);
+    onSessionDeleted?.();
+  };
+
+  const handleDuplicateSession = async (session) => {
+    const { id, ...rest } = session;
+    const origTime = new Date(session.completedAt).getTime();
+    await StorageService.addWorkoutSession({ ...rest, completedAt: new Date(origTime + 1000).toISOString() });
+    onSessionDeleted?.();
+  };
+
   // ─── Day detail ──────────────────────────────────────────────────────────────
   const renderDayDetail = () => {
     if (!selectedDate) return (
@@ -322,28 +393,24 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
             </TouchableOpacity>
           </View>
         ) : (
-          daySessions.map(session => {
-            const hasPR = session.notes?.toLowerCase().includes('pr');
-            const exCount = session.exerciseCount || session.exercises?.length || 0;
-            return (
-              <TouchableOpacity
-                key={session.id}
-                ref={ref => { cardRefs.current[session.id] = ref; }}
-                style={s.sessionCard}
-                onPress={() => openCard(session, session.id)}
-                activeOpacity={0.88}
-              >
-                <View style={s.cardTopRow}>
-                  <Text style={s.cardTime}>{formatTime(session.completedAt)}</Text>
-                  {hasPR && <View style={s.prBadge}><Text style={s.prBadgeText}>NEW PR</Text></View>}
-                </View>
-                <Text style={s.sessionCardName}>{session.name}</Text>
-                {exCount > 0 && (
-                  <Text style={s.cardExCount}>{exCount} exercise{exCount !== 1 ? 's' : ''}</Text>
-                )}
-              </TouchableOpacity>
-            );
-          })
+          daySessions.map(session => (
+            <SwipeableCalSessionCard
+              key={session.id}
+              session={session}
+              cardRef={ref => { cardRefs.current[session.id] = ref; }}
+              onPress={openCard}
+              onDuplicate={handleDuplicateSession}
+              onDelete={handleDeleteSession}
+            />
+          ))
+        )}
+
+        {/* Log Workout button */}
+        {onLogWorkout && (
+          <TouchableOpacity style={s.logWorkoutBtn} onPress={() => onLogWorkout(selectedDate)} activeOpacity={0.8}>
+            <Ionicons name="add" size={16} color="#FFFFFF" />
+            <Text style={s.logWorkoutBtnText}>Log Workout</Text>
+          </TouchableOpacity>
         )}
       </View>
     );
@@ -900,6 +967,9 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.borderColor,
     padding: 16,
   },
+  sessionSwipeDupAction: { backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', width: 72, borderRadius: 14, marginBottom: 10, gap: 4 },
+  sessionSwipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 72, borderRadius: 14, marginBottom: 10, gap: 4 },
+  swipeActionText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   cardTime: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
   sessionCardName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
@@ -912,6 +982,9 @@ const s = StyleSheet.create({
 
   noSessionsBox: { alignItems: 'center', paddingVertical: 32, backgroundColor: Colors.cardBackground, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderColor },
   noSessionsText: { fontSize: 14, color: Colors.gray, marginBottom: 4 },
+
+  logWorkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
+  logWorkoutBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 
   // Expansion animation
   expandBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 },
