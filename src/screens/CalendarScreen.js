@@ -759,7 +759,7 @@ const s = StyleSheet.create({
   // Calendar header
   calHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end',
-    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 14,
+    paddingHorizontal: 20, paddingTop: 52, paddingBottom: 8,
   },
   calYear: { fontSize: 13, color: Colors.gray },
   calMonth: { fontSize: 24, fontWeight: '700', color: '#FFFFFF', marginTop: 2 },
@@ -779,7 +779,7 @@ const s = StyleSheet.create({
     width: '14.285714%', aspectRatio: 1,
     borderRadius: 10, justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   calCellText: { fontSize: 12, fontWeight: '500' },
 
@@ -788,7 +788,7 @@ const s = StyleSheet.create({
   legendDot: { width: 12, height: 12, borderRadius: 3 },
 
   // Day content
-  dayContent: { paddingHorizontal: 20, paddingTop: 8 },
+  dayContent: { paddingHorizontal: 20, paddingTop: 2 },
 
   noDataContainer: { alignItems: 'center', paddingVertical: 50 },
   noDataText: { fontSize: 15, color: Colors.gray, marginTop: 12, textAlign: 'center' },
