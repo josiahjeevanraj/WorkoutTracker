@@ -290,6 +290,7 @@ const WorkoutsScreen = () => {
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
   const [expandedNotes, setExpandedNotes] = useState('');
+  const expandedNotesRef = useRef('');
   const [containerHeight, setContainerHeight] = useState(SCREEN_H);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
@@ -342,21 +343,21 @@ const WorkoutsScreen = () => {
     ref.measure((x, y, width, height, pageX, pageY) => {
       setExpandedCard({ session, rect: { x: pageX, y: pageY, width, height } });
       setExpandedNotes(session.notes || '');
+      expandedNotesRef.current = session.notes || '';
       expandAnim.setValue(0);
       Animated.spring(expandAnim, { toValue: 1, useNativeDriver: false, tension: 55, friction: 11 }).start();
     });
   };
 
   const closeExpansion = () => {
+    const id = expandedCard?.session?.id;
+    if (id) {
+      const notes = expandedNotesRef.current;
+      StorageService.updateWorkoutSession(id, { notes }).catch(console.error);
+      setHistory(prev => prev.map(s => s.id === id ? { ...s, notes } : s));
+    }
     Animated.spring(expandAnim, { toValue: 0, useNativeDriver: false, tension: 65, friction: 12 })
       .start(() => setExpandedCard(null));
-  };
-
-  const saveExpandedNotes = async (notes) => {
-    const id = expandedCard?.session?.id;
-    if (!id) return;
-    await StorageService.updateWorkoutSession(id, { notes });
-    setHistory(prev => prev.map(s => s.id === id ? { ...s, notes } : s));
   };
 
   const enterEditMode = (session) => {
@@ -743,8 +744,7 @@ const WorkoutsScreen = () => {
                     <TextInput
                       style={styles.expandNotesInput}
                       value={expandedNotes}
-                      onChangeText={setExpandedNotes}
-                      onBlur={() => saveExpandedNotes(expandedNotes)}
+                      onChangeText={text => { setExpandedNotes(text); expandedNotesRef.current = text; }}
                       placeholder="Add notes..."
                       placeholderTextColor={Colors.gray}
                       multiline
