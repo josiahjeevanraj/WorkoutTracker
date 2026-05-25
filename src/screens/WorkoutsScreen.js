@@ -283,6 +283,7 @@ const WorkoutsScreen = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedWorkout, setSelectedWorkout] = useState('');
   const [logExercises, setLogExercises] = useState([]);
+  const [logNotes, setLogNotes] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editedSession, setEditedSession] = useState(null);
   const [activeView, setActiveView] = useState('list');
@@ -361,7 +362,7 @@ const WorkoutsScreen = () => {
 
   const handleSaveEdit = async () => {
     const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ex);
-    const updates = { name: editedSession.name?.trim() || selectedSession.name, exercises: cleanExercises, exerciseCount: cleanExercises.length };
+    const updates = { name: editedSession.name?.trim() || selectedSession.name, exercises: cleanExercises, exerciseCount: cleanExercises.length, notes: editedSession.notes ?? '' };
     const updated = await StorageService.updateWorkoutSession(editedSession.id, updates);
     if (updated) {
       setExpandedCard(null);
@@ -433,7 +434,7 @@ const WorkoutsScreen = () => {
       : setEditedSession(prev => ({ ...prev, exercises: updater(prev.exercises) }));
   };
 
-  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); };
+  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); };
   const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
   const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '' }], _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
@@ -442,7 +443,7 @@ const WorkoutsScreen = () => {
   const handleLogWorkout = async () => {
     if (!selectedWorkout) { Alert.alert('Select a workout', 'Please choose a category and workout first'); return; }
     const cleanExercises = logExercises.filter(ex => ex.name.trim()).map(({ _key, ...ex }) => ex);
-    await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: '' });
+    await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: logNotes.trim() });
     await loadHistory();
     closeLogModal();
   };
@@ -653,6 +654,19 @@ const WorkoutsScreen = () => {
                   <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
                 </TouchableOpacity>
               </View>
+              <View style={styles.logNotesGroup}>
+                <Text style={styles.detailSectionLabel}>Notes</Text>
+                <TextInput
+                  style={styles.logNotesInput}
+                  value={editedSession?.notes || ''}
+                  onChangeText={text => setEditedSession(prev => ({ ...prev, notes: text }))}
+                  placeholder="Session notes, PRs, how it felt..."
+                  placeholderTextColor={Colors.gray}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -836,6 +850,20 @@ const WorkoutsScreen = () => {
                   </TouchableOpacity>
                 </>
               )}
+
+              <View style={styles.logNotesGroup}>
+                <Text style={styles.logSectionLabel}>Notes</Text>
+                <TextInput
+                  style={styles.logNotesInput}
+                  value={logNotes}
+                  onChangeText={setLogNotes}
+                  placeholder="How did the session go? Any PRs?"
+                  placeholderTextColor={Colors.gray}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
 
               <View style={[styles.modalButtons, { marginTop: 20 }]}>
                 <TouchableOpacity style={[styles.modalButton, styles.cancelBtn]} onPress={closeLogModal}>
@@ -1034,6 +1062,13 @@ const styles = StyleSheet.create({
   categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   categoryChipText: { color: Colors.text, fontSize: 14, fontWeight: '500' },
   categoryChipTextActive: { color: Colors.white },
+
+  logNotesGroup: { marginTop: 20 },
+  logNotesInput: {
+    borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10,
+    backgroundColor: Colors.background, padding: 12,
+    fontSize: 14, color: '#FFFFFF', minHeight: 80,
+  },
 
   sessionNameInput: {
     borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10,
