@@ -466,7 +466,7 @@ const WorkoutsScreen = () => {
       <TouchableOpacity style={styles.sectionHeader} onPress={() => toggleDay(section.key)} activeOpacity={0.7}>
         <Text style={styles.sectionTitle}>{section.title}</Text>
         <View style={styles.sectionDivider} />
-        <Text style={styles.sectionMeta}>{section.count} {section.count === 1 ? 'session' : 'sessions'} · {section.totalDuration} min</Text>
+        <Text style={styles.sectionMeta}>{section.count} {section.count === 1 ? 'session' : 'sessions'}</Text>
         <Ionicons name={isCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={Colors.gray} style={{ marginLeft: 6 }} />
       </TouchableOpacity>
     );
