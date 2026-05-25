@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  View, Text, StyleSheet, SectionList, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, SectionList, TouchableOpacity,
   Modal, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform,
+  Animated, Dimensions,
 } from 'react-native';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
@@ -274,17 +277,19 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpda
 const WorkoutsScreen = () => {
   const [history, setHistory] = useState([]);
   const [collapsedDays, setCollapsedDays] = useState(new Set());
-  const [selectedSession, setSelectedSession] = useState(null);
+  const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
+  const [selectedSession, setSelectedSession] = useState(null); // edit modal only
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedWorkout, setSelectedWorkout] = useState('');
   const [logExercises, setLogExercises] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editedSession, setEditedSession] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [activeView, setActiveView] = useState('list');
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
+  const expandAnim = useRef(new Animated.Value(0)).current;
+  const cardRefs = useRef({});
 
   useEffect(() => { loadHistory(true).catch(console.error); }, []);
 
@@ -328,32 +333,53 @@ const WorkoutsScreen = () => {
     }));
   }, [history, collapsedDays]);
 
-  const closeDetail = () => {
-    setSelectedSession(null);
-    setEditMode(false);
-    setEditedSession(null);
-    setConfirmDelete(false);
+  const openCard = (session, id) => {
+    const ref = cardRefs.current[id];
+    if (!ref) return;
+    ref.measure((x, y, width, height, pageX, pageY) => {
+      setExpandedCard({ session, rect: { x: pageX, y: pageY, width, height } });
+      expandAnim.setValue(0);
+      Animated.spring(expandAnim, { toValue: 1, useNativeDriver: false, tension: 55, friction: 11 }).start();
+    });
   };
 
-  const executeDelete = async () => {
-    const id = selectedSession?.id;
-    if (!id) return;
-    closeDetail();
-    await StorageService.deleteWorkoutSession(id);
-    setHistory(prev => prev.filter(s => s.id !== id));
+  const closeExpansion = () => {
+    Animated.spring(expandAnim, { toValue: 0, useNativeDriver: false, tension: 65, friction: 12 })
+      .start(() => setExpandedCard(null));
   };
-  const enterEditMode = () => {
-    setEditedSession({ ...selectedSession, exercises: (selectedSession.exercises || []).map((ex, i) => ({ ...ex, _key: i.toString() })) });
+
+  const enterEditMode = (session) => {
+    const s = session || expandedCard?.session;
+    if (!s) return;
+    setSelectedSession(s);
+    setEditedSession({ ...s, exercises: (s.exercises || []).map((ex, i) => ({ ...ex, _key: i.toString() })) });
     setEditMode(true);
   };
-  const cancelEdit = () => { setEditMode(false); setEditedSession(null); };
+
+  const cancelEdit = () => { setEditMode(false); setEditedSession(null); setSelectedSession(null); };
 
   const handleSaveEdit = async () => {
     const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ex);
     const updates = { name: editedSession.name?.trim() || selectedSession.name, exercises: cleanExercises, exerciseCount: cleanExercises.length };
     const updated = await StorageService.updateWorkoutSession(editedSession.id, updates);
-    if (updated) { setSelectedSession(updated); await loadHistory(); }
-    setEditMode(false); setEditedSession(null);
+    if (updated) {
+      setExpandedCard(null);
+      await loadHistory();
+    }
+    setEditMode(false); setEditedSession(null); setSelectedSession(null);
+  };
+
+  const handleDeleteFromExpansion = () => {
+    Alert.alert('Delete Workout', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        const id = expandedCard?.session?.id;
+        if (!id) return;
+        closeExpansion();
+        await StorageService.deleteWorkoutSession(id);
+        setHistory(prev => prev.filter(s => s.id !== id));
+      }},
+    ]);
   };
 
   const updateExercise = (key, field, value) =>
@@ -435,44 +461,23 @@ const WorkoutsScreen = () => {
   };
 
   const renderItem = ({ item }) => {
-    const cat = getCategoryInfo(item.name);
     const hasPR = item.notes?.toLowerCase().includes('pr');
+    const exCount = item.exerciseCount || item.exercises?.length || 0;
     return (
-      <TouchableOpacity style={styles.sessionCard} onPress={() => setSelectedSession(item)} activeOpacity={0.8}>
-        {/* Category color stripe */}
-        <View style={[styles.cardStripe, { backgroundColor: cat.color }]} />
-        <View style={styles.cardBody}>
-          <View style={styles.cardTopRow}>
-            <View style={styles.cardMeta}>
-              <Text style={[styles.cardCategory, { color: cat.color }]}>{cat.label.toUpperCase()}</Text>
-              <View style={styles.cardDot} />
-              <Text style={styles.cardTime}>{formatTime(item.completedAt)}</Text>
-            </View>
-            <Text style={styles.cardDuration}>
-              {item.duration}<Text style={styles.cardDurationUnit}>m</Text>
-            </Text>
-          </View>
-          <Text style={styles.sessionName}>{item.name}</Text>
-          <View style={styles.statsRow}>
-            {(item.exerciseCount || item.exercises?.length) > 0 && (
-              <View style={styles.stat}>
-                <Ionicons name="barbell-outline" size={13} color={Colors.textSecondary} />
-                <Text style={styles.statText}>{item.exerciseCount || item.exercises?.length} exercises</Text>
-              </View>
-            )}
-            {item.caloriesBurned > 0 && (
-              <View style={styles.stat}>
-                <Ionicons name="flame-outline" size={13} color={Colors.softRed} />
-                <Text style={styles.statText}>{item.caloriesBurned} kcal</Text>
-              </View>
-            )}
-            {hasPR && (
-              <View style={styles.prBadge}>
-                <Text style={styles.prBadgeText}>NEW PR</Text>
-              </View>
-            )}
-          </View>
+      <TouchableOpacity
+        ref={ref => { cardRefs.current[item.id] = ref; }}
+        style={styles.sessionCard}
+        onPress={() => openCard(item, item.id)}
+        activeOpacity={0.88}
+      >
+        <View style={styles.cardTopRow}>
+          <Text style={styles.cardTime}>{formatTime(item.completedAt)}</Text>
+          {hasPR && <View style={styles.prBadge}><Text style={styles.prBadgeText}>NEW PR</Text></View>}
         </View>
+        <Text style={styles.sessionName}>{item.name}</Text>
+        {exCount > 0 && (
+          <Text style={styles.cardExCount}>{exCount} exercise{exCount !== 1 ? 's' : ''}</Text>
+        )}
       </TouchableOpacity>
     );
   };
@@ -569,167 +574,170 @@ const WorkoutsScreen = () => {
         <CalendarScreen embedded sessions={history} />
       )}
 
-      {/* ── Detail Modal ────────────────────────────────────────────────────── */}
-      <Modal visible={!!selectedSession} animationType="fade" transparent onRequestClose={editMode ? cancelEdit : closeDetail}>
+      {/* ── Edit Modal ──────────────────────────────────────────────────────── */}
+      <Modal visible={editMode} animationType="fade" transparent onRequestClose={cancelEdit}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.detailModal}>
-
-            {/* Header — outside ScrollView so touches always register */}
             <View style={styles.detailHeader}>
-              {editMode ? (
-                <TextInput
-                  style={[styles.detailName, styles.detailNameInput]}
-                  value={editedSession?.name}
-                  onChangeText={text => setEditedSession(prev => ({ ...prev, name: text }))}
-                  placeholder="Workout name"
-                  placeholderTextColor={Colors.gray}
-                />
-              ) : (
-                <Text style={styles.detailName} numberOfLines={1}>{selectedSession?.name}</Text>
-              )}
+              <TextInput
+                style={[styles.detailName, styles.detailNameInput]}
+                value={editedSession?.name}
+                onChangeText={text => setEditedSession(prev => ({ ...prev, name: text }))}
+                placeholder="Workout name"
+                placeholderTextColor={Colors.gray}
+              />
               <View style={styles.detailHeaderActions}>
-                {editMode ? (
-                  <>
-                    <TouchableOpacity onPress={handleSaveEdit} style={styles.iconButton}><Ionicons name="checkmark" size={24} color={Colors.success} /></TouchableOpacity>
-                    <TouchableOpacity onPress={cancelEdit} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
-                  </>
-                ) : confirmDelete ? (
-                  <>
-                    <TouchableOpacity onPress={() => setConfirmDelete(false)} style={styles.iconButton}><Ionicons name="close-circle-outline" size={22} color={Colors.gray} /></TouchableOpacity>
-                    <TouchableOpacity onPress={executeDelete} style={styles.deleteConfirmBtn}>
-                      <Text style={styles.deleteConfirmBtnText}>Delete</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <TouchableOpacity onPress={() => setConfirmDelete(true)} style={styles.iconButton}><Ionicons name="trash-outline" size={20} color={Colors.softRed} /></TouchableOpacity>
-                    <TouchableOpacity onPress={enterEditMode} style={styles.iconButton}><Ionicons name="pencil" size={20} color={Colors.text} /></TouchableOpacity>
-                    <TouchableOpacity onPress={closeDetail} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
-                  </>
-                )}
+                <TouchableOpacity onPress={handleSaveEdit} style={styles.iconButton}><Ionicons name="checkmark" size={24} color={Colors.success} /></TouchableOpacity>
+                <TouchableOpacity onPress={cancelEdit} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
               </View>
             </View>
-
-            {confirmDelete && (
-              <View style={styles.deleteConfirmBar}>
-                <Ionicons name="warning-outline" size={16} color={Colors.softRed} />
-                <Text style={styles.deleteConfirmText}>Delete this workout? This can't be undone.</Text>
-              </View>
-            )}
-
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
-              {selectedSession && (
-                <Text style={styles.detailDate}>
-                  {new Date(selectedSession.completedAt).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} · {formatTime(selectedSession.completedAt)}
-                </Text>
-              )}
-
               <View style={styles.detailSection}>
                 <Text style={styles.detailSectionLabel}>Exercises</Text>
-                {editMode ? (
-                  <>
-                    {(editedSession?.exercises || []).map(ex => (
-                      <View key={ex._key} style={styles.editExerciseBlock}>
-                        <TouchableOpacity
-                          style={styles.exPickerRow}
-                          onPress={() => { setInlinePickerKey(inlinePickerKey === ex._key ? null : ex._key); setInlinePickerSearch(''); }}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
-                          <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
-                            {ex.name || 'Select exercise'}
-                          </Text>
-                          <Ionicons name={inlinePickerKey === ex._key ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
-                          <TouchableOpacity onPress={() => removeExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <Ionicons name="close-circle" size={20} color={Colors.error} />
-                          </TouchableOpacity>
-                        </TouchableOpacity>
-                        {inlinePickerKey === ex._key && (
-                          <View style={styles.inlinePicker}>
-                            <View style={styles.inlineSearchRow}>
-                              <Ionicons name="search-outline" size={16} color={Colors.gray} />
-                              <TextInput
-                                style={styles.inlineSearchInput}
-                                value={inlinePickerSearch}
-                                onChangeText={setInlinePickerSearch}
-                                placeholder="Search exercises..."
-                                placeholderTextColor={Colors.gray}
-                                autoFocus
-                              />
-                              {inlinePickerSearch.length > 0 && (
-                                <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
-                                  <Ionicons name="close-circle" size={16} color={Colors.gray} />
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                            <ScrollView style={styles.inlinePickerList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                              {(inlinePickerSearch.trim()
-                                ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(inlinePickerSearch.toLowerCase()))
-                                : EXERCISE_LIST
-                              ).map(name => (
-                                <TouchableOpacity
-                                  key={name}
-                                  style={styles.inlinePickerItem}
-                                  onPress={() => {
-                                    updateExercise(ex._key, 'name', name);
-                                    setInlinePickerKey(null);
-                                  }}
-                                >
-                                  <Text style={styles.inlinePickerItemText}>{name}</Text>
-                                </TouchableOpacity>
-                              ))}
-                            </ScrollView>
-                          </View>
-                        )}
-                        {renderInlineSets(ex, 'edit')}
-                      </View>
-                    ))}
-                    <TouchableOpacity style={styles.addExerciseBtn} onPress={addExercise}>
-                      <Ionicons name="add-circle-outline" size={20} color={Colors.text} />
-                      <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
+                {(editedSession?.exercises || []).map(ex => (
+                  <View key={ex._key} style={styles.editExerciseBlock}>
+                    <TouchableOpacity
+                      style={styles.exPickerRow}
+                      onPress={() => { setInlinePickerKey(inlinePickerKey === ex._key ? null : ex._key); setInlinePickerSearch(''); }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
+                      <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
+                        {ex.name || 'Select exercise'}
+                      </Text>
+                      <Ionicons name={inlinePickerKey === ex._key ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
+                      <TouchableOpacity onPress={() => removeExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={20} color={Colors.error} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </>
-                ) : (
-                  (selectedSession?.exercises || []).length === 0 ? (
-                    <Text style={styles.noExercisesText}>No exercises recorded</Text>
-                  ) : (
-                    selectedSession.exercises.map((ex, i) => (
-                      <View key={i} style={styles.exerciseRow}>
-                        <View style={styles.exerciseHeader}>
-                          <Text style={styles.exerciseName}>{ex.name}</Text>
-                          {Array.isArray(ex.sets) && (
-                            <Text style={styles.exerciseSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
+                    {inlinePickerKey === ex._key && (
+                      <View style={styles.inlinePicker}>
+                        <View style={styles.inlineSearchRow}>
+                          <Ionicons name="search-outline" size={16} color={Colors.gray} />
+                          <TextInput
+                            style={styles.inlineSearchInput}
+                            value={inlinePickerSearch}
+                            onChangeText={setInlinePickerSearch}
+                            placeholder="Search exercises..."
+                            placeholderTextColor={Colors.gray}
+                            autoFocus
+                          />
+                          {inlinePickerSearch.length > 0 && (
+                            <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
+                              <Ionicons name="close-circle" size={16} color={Colors.gray} />
+                            </TouchableOpacity>
                           )}
                         </View>
-                        {Array.isArray(ex.sets) ? (
-                          ex.sets.map((set, si) => (
-                            <View key={si} style={styles.setDetailRow}>
-                              <Text style={styles.setDetailLabel}>Set {si + 1}</Text>
-                              <Text style={styles.setDetailMeta}>
-                                {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
-                              </Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.exerciseMeta}>{ex.sets}×{ex.reps}{ex.weight && ex.weight !== '-' ? ` · ${ex.weight}` : ''}</Text>
-                        )}
+                        <ScrollView style={styles.inlinePickerList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                          {(inlinePickerSearch.trim()
+                            ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(inlinePickerSearch.toLowerCase()))
+                            : EXERCISE_LIST
+                          ).map(name => (
+                            <TouchableOpacity
+                              key={name}
+                              style={styles.inlinePickerItem}
+                              onPress={() => { updateExercise(ex._key, 'name', name); setInlinePickerKey(null); }}
+                            >
+                              <Text style={styles.inlinePickerItemText}>{name}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
                       </View>
-                    ))
-                  )
-                )}
+                    )}
+                    {renderInlineSets(ex, 'edit')}
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.addExerciseBtn} onPress={addExercise}>
+                  <Ionicons name="add-circle-outline" size={20} color={Colors.text} />
+                  <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
+                </TouchableOpacity>
               </View>
-
-              {!!selectedSession?.notes && (
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailSectionLabel}>Notes</Text>
-                  <Text style={styles.notesText}>{selectedSession.notes}</Text>
-                </View>
-              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ── Expanded card (iOS-style hero) ──────────────────────────────────── */}
+      {expandedCard && (() => {
+        const { session, rect } = expandedCard;
+        const animLeft   = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.x, 0] });
+        const animTop    = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.y, 0] });
+        const animWidth  = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.width, SCREEN_W] });
+        const animHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, SCREEN_H] });
+        const animRadius = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
+        const contentOp  = expandAnim.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1] });
+        const backdropOp = expandAnim.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1] });
+        const exercises  = session.exercises || [];
+        return (
+          <>
+            <Animated.View style={[styles.expandBackdrop, { opacity: backdropOp }]}
+              pointerEvents="auto">
+              <TouchableOpacity style={{ flex: 1 }} onPress={closeExpansion} activeOpacity={1} />
+            </Animated.View>
+            <Animated.View style={[styles.expandedCard, {
+              left: animLeft, top: animTop, width: animWidth, height: animHeight, borderRadius: animRadius,
+            }]}>
+              <Animated.View style={[{ flex: 1 }, { opacity: contentOp }]}>
+                {/* Header */}
+                <View style={styles.expandHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.expandTime}>
+                      {new Date(session.completedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                      {' · '}{formatTime(session.completedAt)}
+                    </Text>
+                    <Text style={styles.expandName}>{session.name}</Text>
+                  </View>
+                  <TouchableOpacity onPress={closeExpansion} style={styles.expandCloseBtn}>
+                    <Ionicons name="close" size={20} color={Colors.gray} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Exercises */}
+                <ScrollView style={styles.expandScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}>
+                  {exercises.length === 0 ? (
+                    <Text style={styles.noExercisesText}>No exercises recorded</Text>
+                  ) : exercises.map((ex, i) => (
+                    <View key={i} style={styles.expandExercise}>
+                      <View style={styles.expandExHeader}>
+                        <Text style={styles.expandExName}>{ex.name}</Text>
+                        {Array.isArray(ex.sets) && (
+                          <Text style={styles.expandExSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
+                        )}
+                      </View>
+                      {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
+                        <View key={si} style={styles.expandSetRow}>
+                          <Text style={styles.expandSetLabel}>Set {si + 1}</Text>
+                          <Text style={styles.expandSetMeta}>
+                            {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ))}
+                  {!!session.notes && (
+                    <View style={styles.expandNotesBlock}>
+                      <Text style={styles.expandNotesLabel}>Notes</Text>
+                      <Text style={styles.expandNotes}>{session.notes}</Text>
+                    </View>
+                  )}
+                </ScrollView>
+
+                {/* Actions */}
+                <View style={styles.expandActions}>
+                  <TouchableOpacity style={styles.expandDeleteBtn} onPress={handleDeleteFromExpansion}>
+                    <Ionicons name="trash-outline" size={18} color={Colors.softRed} />
+                    <Text style={styles.expandDeleteText}>Delete</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.expandEditBtn} onPress={() => enterEditMode(session)}>
+                    <Ionicons name="pencil" size={18} color="#FFFFFF" />
+                    <Text style={styles.expandEditText}>Edit Workout</Text>
+                  </TouchableOpacity>
+                </View>
+              </Animated.View>
+            </Animated.View>
+          </>
+        );
+      })()}
 
       {/* ── Log Workout Modal ────────────────────────────────────────────────── */}
       <Modal visible={logModalVisible} animationType="fade" transparent onRequestClose={closeLogModal}>
@@ -891,22 +899,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBackground,
     borderRadius: 16, marginBottom: 10,
     borderWidth: 1, borderColor: Colors.borderColor,
-    flexDirection: 'row', overflow: 'hidden',
+    padding: 16,
   },
-  cardStripe: { width: 4 },
-  cardBody: { flex: 1, padding: 14 },
-  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 },
-  cardMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  cardCategory: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
-  cardDot: { width: 3, height: 3, borderRadius: 999, backgroundColor: Colors.gray },
-  cardTime: { fontSize: 11, color: Colors.gray },
-  cardDuration: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
-  cardDurationUnit: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
-  sessionName: { fontSize: 17, fontWeight: '700', color: '#FFFFFF', marginBottom: 10 },
-  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' },
-  stat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statText: { fontSize: 12, color: Colors.textSecondary },
-  prBadge: { marginLeft: 'auto', backgroundColor: 'rgba(52,211,153,0.15)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardTime: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
+  sessionName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 4 },
+  cardExCount: { fontSize: 12, color: Colors.textSecondary },
+  prBadge: { backgroundColor: 'rgba(52,211,153,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   prBadgeText: { fontSize: 10, color: Colors.green, fontWeight: '700' },
 
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
@@ -931,20 +930,32 @@ const styles = StyleSheet.create({
   logModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 24, maxHeight: '90%', borderWidth: 1, borderColor: Colors.borderColor },
   modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 20, textAlign: 'center' },
 
+  // Expansion animation
+  expandBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 },
+  expandedCard: { position: 'absolute', zIndex: 11, backgroundColor: Colors.cardBackground, overflow: 'hidden' },
+  expandHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
+  expandTime: { fontSize: 12, color: Colors.gray, fontWeight: '500', marginBottom: 4 },
+  expandName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
+  expandCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', marginLeft: 12, marginTop: 4 },
+  expandScroll: { flex: 1 },
+  expandExercise: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
+  expandExHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  expandExName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', flex: 1 },
+  expandExSetCount: { fontSize: 12, color: Colors.gray },
+  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
+  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600', width: 50 },
+  expandSetMeta: { fontSize: 13, color: Colors.text, fontWeight: '500' },
+  expandNotesBlock: { marginTop: 20, padding: 14, backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
+  expandNotesLabel: { fontSize: 11, color: Colors.gray, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
+  expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  expandActions: { flexDirection: 'row', gap: 12, padding: 20, paddingBottom: 40, borderTopWidth: 1, borderTopColor: Colors.borderColor },
+  expandDeleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
+  expandDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
+  expandEditBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary },
+  expandEditText: { fontSize: 14, color: '#FFFFFF', fontWeight: '700' },
+
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   detailName: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', flex: 1, marginRight: 8 },
-  deleteConfirmBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(248,113,113,0.1)', borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 8,
-    borderWidth: 1, borderColor: 'rgba(248,113,113,0.25)',
-  },
-  deleteConfirmText: { flex: 1, fontSize: 13, color: Colors.softRed },
-  deleteConfirmBtn: {
-    backgroundColor: Colors.softRed, borderRadius: 8,
-    paddingHorizontal: 14, paddingVertical: 7,
-  },
-  deleteConfirmBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   detailNameInput: { borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: Colors.background, fontSize: 22, fontWeight: 'bold' },
   detailHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   iconButton: { padding: 6 },
