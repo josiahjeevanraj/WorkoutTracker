@@ -288,6 +288,7 @@ const WorkoutsScreen = () => {
   const [activeView, setActiveView] = useState('list');
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
+  const [containerHeight, setContainerHeight] = useState(SCREEN_H);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
 
@@ -509,7 +510,7 @@ const WorkoutsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}>
 
       {/* Header */}
       <View style={styles.header}>
@@ -663,7 +664,7 @@ const WorkoutsScreen = () => {
         const animLeft   = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.x, 0] });
         const animTop    = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.y, 0] });
         const animWidth  = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.width, SCREEN_W] });
-        const animHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, SCREEN_H] });
+        const animHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, containerHeight] });
         const animRadius = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
         const contentOp  = expandAnim.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1] });
         const backdropOp = expandAnim.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1] });
