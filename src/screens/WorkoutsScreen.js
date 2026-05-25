@@ -314,13 +314,6 @@ const WorkoutsScreen = () => {
     }
   };
 
-  const summaryStats = useMemo(() => {
-    const sessions = history.length;
-    const totalMin = history.reduce((s, h) => s + (h.duration || 0), 0);
-    const hours = (totalMin / 60).toFixed(1);
-    return { sessions, hours };
-  }, [history]);
-
   const toggleDay = (key) => {
     setCollapsedDays(prev => {
       const next = new Set(prev);
@@ -546,19 +539,6 @@ const WorkoutsScreen = () => {
 
       {activeView === 'list' ? (
         <>
-          {/* Summary bar */}
-          <View style={styles.summaryBar}>
-            {[
-              { l: 'Sessions', v: String(summaryStats.sessions) },
-              { l: 'Hours',    v: summaryStats.hours },
-            ].map(s => (
-              <View key={s.l} style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>{s.l.toUpperCase()}</Text>
-                <Text style={styles.summaryValue}>{s.v}</Text>
-              </View>
-            ))}
-          </View>
-
           <SectionList
             sections={sections}
             keyExtractor={item => item.id}
