@@ -202,6 +202,7 @@ const getCategoryInfo = (name = '') => {
 const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpdate, onDuplicate, onRemove }) => {
   const swipeRef = useRef(null);
   const close = () => swipeRef.current?.close();
+  const unit = set.unit || 'kg';
 
   const renderLeftActions = () => (
     <TouchableOpacity
@@ -236,14 +237,24 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpda
     >
       <View style={styles.inlineSetRow}>
         <Text style={styles.inlineSetLabel}>Set {si + 1}</Text>
-        <TextInput
-          style={styles.inlineSetInput}
-          value={String(set.weight || '')}
-          onChangeText={v => onUpdate(exKey, si, 'weight', v, context)}
-          placeholder="kg"
-          placeholderTextColor={Colors.gray}
-          keyboardType="decimal-pad"
-        />
+        <View style={styles.weightInputGroup}>
+          <TextInput
+            style={[styles.inlineSetInput, { flex: 1 }]}
+            value={String(set.weight || '')}
+            onChangeText={v => onUpdate(exKey, si, 'weight', v, context)}
+            placeholder="0"
+            placeholderTextColor={Colors.gray}
+            keyboardType="decimal-pad"
+          />
+          <TouchableOpacity
+            style={styles.unitToggle}
+            onPress={() => onUpdate(exKey, si, 'unit', unit === 'kg' ? 'lbs' : 'kg', context)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.unitToggleText}>{unit}</Text>
+            <Ionicons name="chevron-down" size={10} color={Colors.gray} />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.inlineSetX}>×</Text>
         <TextInput
           style={styles.inlineSetInput}
@@ -351,8 +362,6 @@ const WorkoutsScreen = () => {
     setEditedSession(prev => ({ ...prev, exercises: prev.exercises.filter(ex => ex._key !== key) }));
   const addExercise = () =>
     setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: [{ reps: '', weight: '' }], _key: Date.now().toString() }] }));
-
-  const repsPresets = ['6', '8', '10', '12', '15', '20'];
 
   // ── Inline set helpers (used in both log and edit flows) ──────────────────
   const updateSet = (exKey, setIdx, field, value, context) => {
@@ -486,17 +495,6 @@ const WorkoutsScreen = () => {
             onRemove={removeSet}
           />
         ))}
-        <View style={styles.repsPresetRow}>
-          {repsPresets.map(r => (
-            <TouchableOpacity
-              key={r}
-              style={[styles.presetBtn, sets[sets.length - 1]?.reps === r && styles.presetBtnActive]}
-              onPress={() => updateSet(ex._key, sets.length - 1, 'reps', r, context)}
-            >
-              <Text style={[styles.presetText, sets[sets.length - 1]?.reps === r && styles.presetTextActive]}>{r}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
         <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => addSet(ex._key, context)}>
           <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
           <Text style={styles.inlineAddSetText}>Add Set</Text>
@@ -709,7 +707,7 @@ const WorkoutsScreen = () => {
                             <View key={si} style={styles.setDetailRow}>
                               <Text style={styles.setDetailLabel}>Set {si + 1}</Text>
                               <Text style={styles.setDetailMeta}>
-                                {set.weight ? `${set.weight}kg` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
+                                {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
                               </Text>
                             </View>
                           ))
@@ -973,11 +971,6 @@ const styles = StyleSheet.create({
   setInputsRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   setInput: { flex: 1, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, padding: 10, fontSize: 15, backgroundColor: Colors.cardBackground, color: '#FFFFFF', textAlign: 'center' },
   setMultiply: { fontSize: 18, color: Colors.gray, fontWeight: '600' },
-  repsPresetRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  presetBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
-  presetBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  presetText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
-  presetTextActive: { color: '#FFFFFF', fontWeight: '700' },
   addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10, borderStyle: 'dashed', marginTop: 4, marginBottom: 12 },
   addSetText: { color: Colors.green, fontSize: 14, fontWeight: '500' },
   setsSummaryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
@@ -1012,7 +1005,10 @@ const styles = StyleSheet.create({
   swipeHint: { fontSize: 10, color: Colors.gray, textAlign: 'center', marginBottom: 6, letterSpacing: 0.4 },
   inlineSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, backgroundColor: Colors.background, paddingVertical: 6, paddingHorizontal: 4, borderRadius: 8 },
   inlineSetLabel: { fontSize: 12, color: Colors.gray, fontWeight: '600', width: 44 },
+  weightInputGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
   inlineSetInput: { flex: 1, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, fontSize: 14, color: '#FFFFFF', backgroundColor: Colors.background, textAlign: 'center' },
+  unitToggle: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 7, paddingVertical: 8, backgroundColor: Colors.cardBackground, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor },
+  unitToggleText: { fontSize: 11, color: Colors.text, fontWeight: '700' },
   inlineSetX: { fontSize: 16, color: Colors.gray, fontWeight: '600' },
   inlineAddSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, borderStyle: 'dashed', marginTop: 4 },
   inlineAddSetText: { fontSize: 13, color: Colors.green, fontWeight: '500' },

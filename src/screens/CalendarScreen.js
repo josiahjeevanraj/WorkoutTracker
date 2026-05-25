@@ -353,7 +353,7 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
                           <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
                           <Text style={s.exMeta}>
                             {Array.isArray(ex.sets)
-                              ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}kg` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
+                              ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}${ex.sets[0].unit || 'kg'}` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
                               : `${ex.sets}×${ex.reps}${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`}
                           </Text>
                         </View>
@@ -409,7 +409,7 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
                         <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
                         <Text style={s.exMeta}>
                           {Array.isArray(ex.sets)
-                            ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}kg` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
+                            ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}${ex.sets[0].unit || 'kg'}` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
                             : `${ex.sets}×${ex.reps}${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`}
                         </Text>
                       </View>
