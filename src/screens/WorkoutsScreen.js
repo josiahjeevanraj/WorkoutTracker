@@ -213,7 +213,7 @@ const WorkoutsScreen = () => {
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
 
-  useEffect(() => { loadHistory(true); }, []);
+  useEffect(() => { loadHistory(true).catch(console.error); }, []);
 
   const loadHistory = async (seed = false) => {
     const [saved, isUnset] = await Promise.all([

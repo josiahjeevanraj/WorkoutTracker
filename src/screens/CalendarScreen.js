@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import StorageService from '../services/StorageService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -86,13 +87,11 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
   const durationPresets = ['15','20','30','45','60','75','90','120'];
   const repsPresets = ['6','8','10','12','15','20'];
 
-  const [fitnessData, setFitnessData] = useState({
-    '2025-01-20': { caloriesConsumed: 2100, caloriesBurned: 450, weight: 74.5, workouts: ['Running - 30 mins','Bench Press - Set 1: 60kg x 10, Set 2: 60kg x 10'] },
-    '2025-01-21': { caloriesConsumed: 1850, caloriesBurned: 320, weight: 74.3, workouts: ['Squat - Set 1: 80kg x 8, Set 2: 80kg x 8','Pull-ups - Set 1: 10, Set 2: 8'] },
-    '2025-01-22': { caloriesConsumed: 2250, caloriesBurned: 580, weight: 74.2, workouts: ['Swimming - 45 mins','Cycling - 30 mins'] },
-    '2025-01-23': { caloriesConsumed: 1950, caloriesBurned: 210, weight: 74.1, workouts: ['Walking - 20 mins'] },
-    '2025-01-24': { caloriesConsumed: 2000, caloriesBurned: 520, weight: 74.0, workouts: ['HIIT Training - 30 mins','Deadlift - Set 1: 100kg x 6, Set 2: 100kg x 5'] },
-  });
+  const [fitnessData, setFitnessData] = useState({});
+
+  useEffect(() => {
+    StorageService.getFitnessData().then(data => setFitnessData(data)).catch(console.error);
+  }, []);
 
   const sessionsByDate = useMemo(() => {
     const map = {};
@@ -141,15 +140,17 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
   };
 
   const saveData = () => {
-    setFitnessData(prev => ({
-      ...prev,
+    const updated = {
+      ...fitnessData,
       [selectedDate]: {
         caloriesConsumed: parseInt(editingData.caloriesConsumed) || 0,
         caloriesBurned: parseInt(editingData.caloriesBurned) || 0,
         weight: editingData.weight ? parseFloat(editingData.weight) : null,
         workouts: editingData.workouts.filter(w => w.trim()),
       },
-    }));
+    };
+    setFitnessData(updated);
+    StorageService.saveFitnessData(updated).catch(console.error);
     setIsEditing(false); setShowWorkoutSelector(false); setExpandedCategories({});
     Alert.alert('Success', 'Data saved!');
   };
@@ -166,7 +167,9 @@ const CalendarScreen = ({ embedded = false, sessions = [] }) => {
       { text: 'Delete', style: 'destructive', onPress: () => {
         const newData = { ...fitnessData };
         delete newData[selectedDate];
-        setFitnessData(newData); setIsEditing(false);
+        setFitnessData(newData);
+        StorageService.saveFitnessData(newData).catch(console.error);
+        setIsEditing(false);
       }},
     ]);
   };

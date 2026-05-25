@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   USER_PROFILE: '@user_profile',
   WORKOUT_HISTORY: '@workout_history',
   PROGRESS_DATA: '@progress_data',
+  FITNESS_DATA: '@fitness_data',
 };
 
 class StorageService {
@@ -174,6 +175,26 @@ class StorageService {
     } catch (error) {
       console.error('Error loading progress data:', error);
       return {};
+    }
+  }
+
+  async getFitnessData() {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.FITNESS_DATA);
+      return data ? JSON.parse(data) : {};
+    } catch (error) {
+      console.error('Error loading fitness data:', error);
+      return {};
+    }
+  }
+
+  async saveFitnessData(fitnessData) {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.FITNESS_DATA, JSON.stringify(fitnessData));
+      return true;
+    } catch (error) {
+      console.error('Error saving fitness data:', error);
+      return false;
     }
   }
 
