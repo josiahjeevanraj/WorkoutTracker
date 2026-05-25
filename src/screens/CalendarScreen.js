@@ -298,9 +298,6 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
               {dayData?.weight ? ` · ${dayData.weight} kg` : ''}
             </Text>
           </View>
-          <TouchableOpacity onPress={startEditing} style={s.editIconBtn}>
-            <Ionicons name="pencil" size={16} color={Colors.textSecondary} />
-          </TouchableOpacity>
         </View>
 
         {/* Energy compact row */}
@@ -629,12 +626,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
               );
             })}
           </View>
-          {/* Legend */}
-          <View style={s.legendRow}>
-            <Text style={s.legendLabel}>Less</Text>
-            {[1,2,3,4].map(n => <View key={n} style={[s.legendDot, { backgroundColor: heatColor(n) }]} />)}
-            <Text style={s.legendLabel}>More</Text>
-          </View>
+
         </View>
 
         {/* Day content */}
