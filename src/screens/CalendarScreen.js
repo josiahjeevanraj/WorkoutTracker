@@ -771,7 +771,7 @@ const s = StyleSheet.create({
   },
 
   // Calendar grid
-  calGrid: { marginHorizontal: 18, marginBottom: 4 },
+  calGrid: { marginHorizontal: 18, marginBottom: 0 },
   calDayHeaders: { flexDirection: 'row', marginBottom: 6 },
   calDayHeader: { flex: 1, textAlign: 'center', fontSize: 10, color: Colors.gray, fontWeight: '600' },
   calCells: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -788,7 +788,7 @@ const s = StyleSheet.create({
   legendDot: { width: 12, height: 12, borderRadius: 3 },
 
   // Day content
-  dayContent: { paddingHorizontal: 20, paddingTop: 16 },
+  dayContent: { paddingHorizontal: 20, paddingTop: 8 },
 
   noDataContainer: { alignItems: 'center', paddingVertical: 50 },
   noDataText: { fontSize: 15, color: Colors.gray, marginTop: 12, textAlign: 'center' },
