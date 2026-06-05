@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions,
   TouchableOpacity, FlatList, TextInput, Modal,
@@ -13,7 +13,7 @@ import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_W = SCREEN_WIDTH - 36;
+const CHART_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
 
 const BODY_METRICS = [
   { id: 'weight',           label: 'Body Weight',   unit: 'kg',   color: Colors.text },
@@ -21,24 +21,24 @@ const BODY_METRICS = [
   { id: 'caloriesConsumed', label: 'Cals Consumed', unit: 'kcal', color: Colors.amber },
 ];
 
-const CARDIO_METRICS = [
-  { id: 'pace',     label: 'Pace',     unit: 'min/km', color: Colors.text },
-  { id: 'distance', label: 'Distance', unit: 'km',     color: Colors.indigo },
+const STRENGTH_METRICS = [
+  { id: 'maxWeight', label: 'Max Weight', unit: 'kg', color: Colors.text },
+  { id: 'volume',    label: 'Volume',     unit: 'kg', color: Colors.indigo },
 ];
 
-const EXERCISE_ICONS = {
-  Running:       { icon: 'walk-outline',    color: Colors.softRed },
-  Cycling:       { icon: 'bicycle-outline', color: Colors.amber },
-  Swimming:      { icon: 'water-outline',   color: Colors.indigo },
-  'Bench Press': { icon: 'barbell-outline', color: Colors.text },
-  Squats:        { icon: 'barbell-outline', color: Colors.green },
-  Deadlifts:     { icon: 'barbell-outline', color: Colors.indigo },
-};
+// YYYY-MM-DD key from a local Date
+const toKey = d =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // ─── SVG line chart ───────────────────────────────────────────────────────────
-const LineChartSVG = ({ data, labels, color = Colors.text }) => {
+const SVG_H = 110;
+
+const LineChartSVG = ({ data, labels, color = Colors.text, unit = '' }) => {
+  const [selectedPoint, setSelectedPoint] = useState(null);
+  useEffect(() => { setSelectedPoint(null); }, [data]);
+
   const nonZero = (data || []).filter(v => v > 0);
-  if (!data || data.length < 2 || nonZero.length < 2) {
+  if (!data || data.length < 2 || nonZero.length === 0) {
     return (
       <View style={styles.emptyChart}>
         <Ionicons name="analytics-outline" size={28} color={Colors.gray} />
@@ -46,6 +46,7 @@ const LineChartSVG = ({ data, labels, color = Colors.text }) => {
       </View>
     );
   }
+
   const VW = 300; const VH = 100; const PAD = 10;
   const max = Math.max(...nonZero);
   const minVal = Math.min(...nonZero);
@@ -56,41 +57,79 @@ const LineChartSVG = ({ data, labels, color = Colors.text }) => {
     y: v > 0 ? PAD + h - ((v - minVal) / range) * h : null,
     v,
   }));
+  const nonNullPts = pts.filter(p => p.y !== null);
 
-  const segments = [];
-  let seg = [];
-  pts.forEach(p => {
-    if (p.y !== null) {
-      seg.push(p);
-    } else if (seg.length > 0) {
-      segments.push(seg); seg = [];
-    }
-  });
-  if (seg.length > 0) segments.push(seg);
+  const scaleX = CHART_W / VW;
+  const scaleY = SVG_H / VH;
+  const TOOLTIP_W = 80; const TOOLTIP_H = 28;
+
+  const getTooltipPos = pt => {
+    const sx = pt.x * scaleX;
+    const sy = pt.svgY * scaleY;
+    const left = Math.min(Math.max(sx - TOOLTIP_W / 2, 0), CHART_W - TOOLTIP_W);
+    const aboveY = sy - TOOLTIP_H - 8;
+    return { left, top: aboveY < 2 ? sy + 10 : aboveY };
+  };
+
+  const fmtV = v => v % 1 === 0 ? String(v) : v.toFixed(1);
+  const tooltipLabel = pt => `${fmtV(pt.v)}${unit ? ` ${unit}` : ''}`;
+
+  // Single point: render a dot centred vertically, tappable
+  if (nonNullPts.length === 1) {
+    const p = { ...nonNullPts[0], svgY: VH / 2 };
+    const pos = selectedPoint ? getTooltipPos(selectedPoint) : null;
+    return (
+      <View style={{ position: 'relative' }}>
+        <Svg width={CHART_W} height={SVG_H} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
+          <Circle
+            cx={p.x} cy={VH / 2}
+            r={selectedPoint ? 5 : 4}
+            fill={color}
+            onPress={() => setSelectedPoint(prev => prev ? null : p)}
+          />
+        </Svg>
+        {selectedPoint && pos && (
+          <View pointerEvents="none" style={[styles.tooltip, { left: pos.left, top: pos.top, width: TOOLTIP_W, borderColor: color }]}>
+            <Text style={styles.tooltipText}>{tooltipLabel(selectedPoint)}</Text>
+          </View>
+        )}
+        <View style={styles.chartLabels}>
+          {labels.map((l, i) => <Text key={i} style={styles.chartLabel}>{l}</Text>)}
+        </View>
+      </View>
+    );
+  }
+
+  const linePath = nonNullPts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${nonNullPts[nonNullPts.length - 1].x.toFixed(1)} ${VH} L ${nonNullPts[0].x.toFixed(1)} ${VH} Z`;
+  const pos = selectedPoint ? getTooltipPos(selectedPoint) : null;
 
   return (
-    <View>
-      <Svg width={CHART_W} height={110} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
+    <View style={{ position: 'relative' }}>
+      <Svg width={CHART_W} height={SVG_H} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
         <Defs>
           <SvgGradient id="lgG" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0%" stopColor={color} stopOpacity={0.3} />
             <Stop offset="100%" stopColor={color} stopOpacity={0} />
           </SvgGradient>
         </Defs>
-        {segments.map((s, si) => {
-          const l = s.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-          const a = `${l} L ${s[s.length - 1].x.toFixed(1)} ${VH} L ${s[0].x.toFixed(1)} ${VH} Z`;
-          return (
-            <React.Fragment key={si}>
-              <Path d={a} fill="url(#lgG)" />
-              <Path d={l} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
-            </React.Fragment>
-          );
-        })}
-        {pts.filter(p => p.y !== null).map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={3} fill={color} />
+        <Path d={areaPath} fill="url(#lgG)" />
+        <Path d={linePath} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {nonNullPts.map((p, i) => (
+          <Circle
+            key={i}
+            cx={p.x} cy={p.y}
+            r={selectedPoint?.x === p.x ? 5 : 3}
+            fill={color}
+            onPress={() => setSelectedPoint(prev => prev?.x === p.x ? null : { ...p, svgY: p.y })}
+          />
         ))}
       </Svg>
+      {selectedPoint && pos && (
+        <View pointerEvents="none" style={[styles.tooltip, { left: pos.left, top: pos.top, width: TOOLTIP_W, borderColor: color }]}>
+          <Text style={styles.tooltipText}>{tooltipLabel(selectedPoint)}</Text>
+        </View>
+      )}
       <View style={styles.chartLabels}>
         {labels.map((l, i) => (
           <Text key={i} style={styles.chartLabel}>{l}</Text>
@@ -100,43 +139,163 @@ const LineChartSVG = ({ data, labels, color = Colors.text }) => {
   );
 };
 
+// ─── Date range picker ────────────────────────────────────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAY_LABELS = ['S','M','T','W','T','F','S'];
+
+const DateRangePicker = ({ visible, start, end, onApply, onClose }) => {
+  const today = new Date();
+  const [pickerMonth, setPickerMonth] = useState(today.getMonth());
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [tempStart, setTempStart] = useState(start);
+  const [tempEnd, setTempEnd] = useState(end);
+
+  useEffect(() => {
+    if (visible) { setTempStart(start); setTempEnd(end); }
+  }, [visible]);
+
+  const handleDayPress = day => {
+    const key = `${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (!tempStart || tempEnd) {
+      setTempStart(key); setTempEnd(null);
+    } else if (key < tempStart) {
+      setTempStart(key); setTempEnd(null);
+    } else {
+      setTempEnd(key);
+    }
+  };
+
+  const prevMonth = () => {
+    if (pickerMonth === 0) { setPickerMonth(11); setPickerYear(y => y - 1); }
+    else setPickerMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (pickerMonth === 11) { setPickerMonth(0); setPickerYear(y => y + 1); }
+    else setPickerMonth(m => m + 1);
+  };
+
+  const firstDay = new Date(pickerYear, pickerMonth, 1).getDay();
+  const daysInMonth = new Date(pickerYear, pickerMonth + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push(`${pickerYear}-${String(pickerMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  }
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const isInRange = key => key && tempStart && tempEnd && key > tempStart && key < tempEnd;
+  const isEndpoint = key => key && (key === tempStart || key === tempEnd);
+  const fmtKey = key => key ? new Date(key + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableOpacity style={pickerStyles.backdrop} activeOpacity={1} onPress={onClose} />
+      <View style={pickerStyles.sheet}>
+        <View style={pickerStyles.handle} />
+        <Text style={pickerStyles.title}>Select Date Range</Text>
+
+        <View style={pickerStyles.monthNav}>
+          <TouchableOpacity onPress={prevMonth} style={pickerStyles.navBtn}>
+            <Ionicons name="chevron-back" size={20} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={pickerStyles.monthLabel}>{MONTH_NAMES[pickerMonth]} {pickerYear}</Text>
+          <TouchableOpacity onPress={nextMonth} style={pickerStyles.navBtn}>
+            <Ionicons name="chevron-forward" size={20} color={Colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={pickerStyles.dayHeaders}>
+          {DAY_LABELS.map((d, i) => <Text key={i} style={pickerStyles.dayHeader}>{d}</Text>)}
+        </View>
+
+        <View style={pickerStyles.grid}>
+          {cells.map((key, i) => {
+            const day = key ? parseInt(key.split('-')[2]) : null;
+            const inRange = isInRange(key);
+            const endpoint = isEndpoint(key);
+            return (
+              <TouchableOpacity
+                key={i}
+                style={[
+                  pickerStyles.cell,
+                  inRange && pickerStyles.cellInRange,
+                  endpoint && pickerStyles.cellEndpoint,
+                  !key && pickerStyles.cellEmpty,
+                ]}
+                onPress={() => key && handleDayPress(day)}
+                disabled={!key}
+              >
+                {key && (
+                  <Text style={[
+                    pickerStyles.cellText,
+                    inRange && pickerStyles.cellInRangeText,
+                    endpoint && pickerStyles.cellEndpointText,
+                  ]}>{day}</Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <View style={pickerStyles.rangeSummary}>
+          <Text style={pickerStyles.rangeSummaryText}>
+            {fmtKey(tempStart)} → {tempEnd ? fmtKey(tempEnd) : 'select end date'}
+          </Text>
+        </View>
+
+        <View style={pickerStyles.btnRow}>
+          <TouchableOpacity style={pickerStyles.cancelBtn} onPress={onClose}>
+            <Text style={pickerStyles.cancelBtnText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[pickerStyles.applyBtn, (!tempStart || !tempEnd) && { opacity: 0.4 }]}
+            onPress={() => { if (tempStart && tempEnd) onApply(tempStart, tempEnd); }}
+            disabled={!tempStart || !tempEnd}
+          >
+            <Text style={pickerStyles.applyBtnText}>Apply</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 const ProgressScreen = () => {
   const [progressType, setProgressType] = useState('body');
   const [selectedMetric, setSelectedMetric] = useState('weight');
-  const [cardioMetric, setCardioMetric] = useState('pace');
+  const [strengthMetric, setStrengthMetric] = useState('maxWeight');
   const [timeView, setTimeView] = useState('week');
   const [currentWeekOffset, setCurrentWeekOffset] = useState(0);
   const [currentMonthOffset, setCurrentMonthOffset] = useState(0);
   const [currentYearOffset, setCurrentYearOffset] = useState(0);
-  const [bodyData, setBodyData] = useState([]);
-  const [exerciseData, setExerciseData] = useState([]);
+  // bodyData: { 'YYYY-MM-DD': { weight, caloriesBurned, caloriesConsumed } }
+  const [bodyData, setBodyData] = useState({});
+  const [workoutHistory, setWorkoutHistory] = useState([]);
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [exerciseModalVisible, setExerciseModalVisible] = useState(false);
-  const [availableExercises, setAvailableExercises] = useState([]);
+  const [exerciseSearch, setExerciseSearch] = useState('');
+  const [sessionsExpanded, setSessionsExpanded] = useState(false);
   const [userStats, setUserStats] = useState({ height: '', bodyFat: '' });
   const [goals, setGoals] = useState({ targetWeight: '', targetBodyFat: '' });
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
   const [statsEdit, setStatsEdit] = useState({ height: '', bodyFat: '' });
   const [goalsEdit, setGoalsEdit] = useState({ targetWeight: '', targetBodyFat: '' });
+  const [customStartDate, setCustomStartDate] = useState(null);
+  const [customEndDate, setCustomEndDate] = useState(null);
+  const [customPickerVisible, setCustomPickerVisible] = useState(false);
+  const [includeWarmupInStats, setIncludeWarmupInStats] = useState(true);
 
-  useEffect(() => { loadProgressData(); loadProfile(); }, []);
+  useEffect(() => { loadData(); loadProfile(); }, []);
 
-  const loadProgressData = async () => {
-    const progressData = await StorageService.getProgressData();
-    if (progressData.bodyMetrics) {
-      setBodyData(progressData.bodyMetrics);
-    } else {
-      const sampleData = generateSampleData();
-      setBodyData(sampleData.bodyMetrics);
-      setExerciseData(sampleData.exercises);
-      setAvailableExercises(Object.keys(sampleData.exercises));
-      await StorageService.saveProgressData({
-        bodyMetrics: sampleData.bodyMetrics,
-        exercises: sampleData.exercises,
-      });
-    }
+  const loadData = async () => {
+    const [fitnessData, history] = await Promise.all([
+      StorageService.getFitnessData(),
+      StorageService.getWorkoutHistory(),
+    ]);
+    setBodyData(fitnessData || {});
+    setWorkoutHistory(history || []);
   };
 
   const loadProfile = async () => {
@@ -169,38 +328,20 @@ const ProgressScreen = () => {
     setGoalsModalVisible(false);
   };
 
-  const generateSampleData = () => {
-    const today = new Date();
-    const bodyMetrics = [];
-    const exercises = { Running: [], Cycling: [], Swimming: [], 'Bench Press': [], Squats: [], Deadlifts: [] };
+  // Unique exercise names from logged sessions, sorted alphabetically
+  const availableExercises = useMemo(() => {
+    const names = new Set();
+    workoutHistory.forEach(s => s.exercises?.forEach(e => { if (e.name) names.add(e.name); }));
+    return [...names].sort();
+  }, [workoutHistory]);
 
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      bodyMetrics.push({
-        date: date.toISOString(),
-        weight: 150 + Math.random() * 10,
-        caloriesBurned: 300 + Math.random() * 200,
-        caloriesConsumed: 1800 + Math.random() * 400,
-      });
-    }
+  const filteredExercises = useMemo(() => {
+    if (!exerciseSearch.trim()) return availableExercises;
+    const q = exerciseSearch.toLowerCase();
+    return availableExercises.filter(n => n.toLowerCase().includes(q));
+  }, [availableExercises, exerciseSearch]);
 
-    ['Running', 'Cycling', 'Swimming'].forEach(ex => {
-      for (let i = 0; i < 10; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-        exercises[ex].push({
-          date: date.toISOString(),
-          distance: (Math.random() * 10 + 1).toFixed(2),
-          duration: Math.floor(Math.random() * 60 + 20),
-          pace: (Math.random() * 3 + 5).toFixed(2),
-        });
-      }
-    });
-
-    return { bodyMetrics, exercises };
-  };
-
+  // ─── Body chart data ────────────────────────────────────────────────────────
   const getBodyChartData = () => {
     let filteredData = [];
     let labels = [];
@@ -214,8 +355,7 @@ const ProgressScreen = () => {
         for (let i = 0; i < 7; i++) {
           const target = new Date(weekStart);
           target.setDate(weekStart.getDate() + i);
-          const d = bodyData.find(d => new Date(d.date).toDateString() === target.toDateString());
-          filteredData.push(d ? d[selectedMetric] : 0);
+          filteredData.push(bodyData[toKey(target)]?.[selectedMetric] || 0);
         }
         break;
       }
@@ -225,8 +365,7 @@ const ProgressScreen = () => {
         for (let i = 1; i <= daysInMonth; i++) {
           if (i % 5 === 1) labels.push(i.toString());
           const target = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
-          const d = bodyData.find(d => new Date(d.date).toDateString() === target.toDateString());
-          filteredData.push(d ? d[selectedMetric] : 0);
+          filteredData.push(bodyData[toKey(target)]?.[selectedMetric] || 0);
         }
         break;
       }
@@ -234,107 +373,26 @@ const ProgressScreen = () => {
         const year = now.getFullYear() - currentYearOffset;
         labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         for (let month = 0; month < 12; month++) {
-          const monthData = bodyData.filter(d => {
-            const date = new Date(d.date);
-            return date.getFullYear() === year && date.getMonth() === month;
+          const monthEntries = Object.entries(bodyData).filter(([key]) => {
+            const d = new Date(key + 'T00:00:00');
+            return d.getFullYear() === year && d.getMonth() === month;
           });
-          filteredData.push(
-            monthData.length > 0
-              ? monthData.reduce((s, d) => s + d[selectedMetric], 0) / monthData.length
-              : 0
-          );
-        }
-        break;
-      }
-      case 'allTime': {
-        const allMonths = {};
-        bodyData.forEach(d => {
-          const date = new Date(d.date);
-          const key = `${date.getFullYear()}-${date.getMonth()}`;
-          if (!allMonths[key]) allMonths[key] = [];
-          allMonths[key].push(d[selectedMetric]);
-        });
-        Object.keys(allMonths).sort().slice(-12).forEach(key => {
-          const [year, month] = key.split('-');
-          labels.push(`${month}/${year.slice(-2)}`);
-          const vals = allMonths[key];
-          filteredData.push(vals.reduce((a, b) => a + b, 0) / vals.length);
-        });
-        break;
-      }
-    }
-    return { labels, data: filteredData };
-  };
-
-  const getExerciseChartData = () => {
-    if (!selectedExercise || !exerciseData[selectedExercise]) return { labels: [], data: [] };
-    const isCardio = ['Running', 'Cycling', 'Swimming'].includes(selectedExercise);
-    if (!isCardio) return { labels: [], data: [] };
-
-    const sessions = exerciseData[selectedExercise] || [];
-    const now = new Date();
-    let filteredData = [];
-    let labels = [];
-
-    switch (timeView) {
-      case 'week': {
-        const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - currentWeekOffset * 7);
-        labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        for (let i = 0; i < 7; i++) {
-          const target = new Date(weekStart);
-          target.setDate(weekStart.getDate() + i);
-          const dayData = sessions.filter(d => new Date(d.date).toDateString() === target.toDateString());
-          if (dayData.length > 0) {
-            filteredData.push(
-              dayData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / dayData.length
-            );
+          if (monthEntries.length > 0) {
+            const vals = monthEntries.map(([, v]) => v[selectedMetric] || 0).filter(v => v > 0);
+            filteredData.push(vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : 0);
           } else {
             filteredData.push(0);
           }
         }
         break;
       }
-      case 'month': {
-        const monthDate = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
-        for (let week = 0; week < 4; week++) {
-          labels.push(`W${week + 1}`);
-          const wStart = new Date(monthDate);
-          wStart.setDate(wStart.getDate() + week * 7);
-          const wEnd = new Date(wStart);
-          wEnd.setDate(wStart.getDate() + 6);
-          const weekData = sessions.filter(d => { const date = new Date(d.date); return date >= wStart && date <= wEnd; });
-          filteredData.push(
-            weekData.length > 0
-              ? weekData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / weekData.length
-              : 0
-          );
-        }
-        break;
-      }
-      case 'year': {
-        const year = now.getFullYear() - currentYearOffset;
-        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        for (let month = 0; month < 12; month++) {
-          const monthData = sessions.filter(d => {
-            const date = new Date(d.date);
-            return date.getFullYear() === year && date.getMonth() === month;
-          });
-          filteredData.push(
-            monthData.length > 0
-              ? monthData.reduce((s, d) => s + parseFloat(cardioMetric === 'pace' ? d.pace : d.distance), 0) / monthData.length
-              : 0
-          );
-        }
-        break;
-      }
       case 'allTime': {
         const allMonths = {};
-        sessions.forEach(d => {
-          const date = new Date(d.date);
-          const key = `${date.getFullYear()}-${date.getMonth()}`;
-          if (!allMonths[key]) allMonths[key] = [];
-          allMonths[key].push(parseFloat(cardioMetric === 'pace' ? d.pace : d.distance));
+        Object.entries(bodyData).forEach(([key, val]) => {
+          const d = new Date(key + 'T00:00:00');
+          const mk = `${d.getFullYear()}-${d.getMonth()}`;
+          if (!allMonths[mk]) allMonths[mk] = [];
+          if (val[selectedMetric]) allMonths[mk].push(val[selectedMetric]);
         });
         const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         Object.keys(allMonths).sort().slice(-12).forEach(key => {
@@ -345,9 +403,113 @@ const ProgressScreen = () => {
         });
         break;
       }
+      case 'custom': {
+        if (!customStartDate || !customEndDate) break;
+        const startD = new Date(customStartDate + 'T00:00:00');
+        const endD = new Date(customEndDate + 'T00:00:00');
+        const totalDays = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+        const labelEvery = totalDays <= 14 ? 2 : totalDays <= 31 ? 5 : 7;
+        for (let i = 0; i < totalDays; i++) {
+          const target = new Date(startD);
+          target.setDate(startD.getDate() + i);
+          filteredData.push(bodyData[toKey(target)]?.[selectedMetric] || 0);
+          if (i === 0 || i % labelEvery === 0) labels.push(`${target.getMonth() + 1}/${target.getDate()}`);
+        }
+        break;
+      }
     }
     return { labels, data: filteredData };
   };
+
+  // ─── Strength chart data ────────────────────────────────────────────────────
+  const getStrengthChartData = () => {
+    if (!selectedExercise) return { labels: [], data: [] };
+
+    const sessionPoints = workoutHistory
+      .filter(s => s.exercises?.some(e => e.name === selectedExercise))
+      .map(s => {
+        const ex = s.exercises.find(e => e.name === selectedExercise);
+        const maxW = ex.sets.reduce((m, set) => Math.max(m, parseFloat(set.weight) || 0), 0);
+        const vol = ex.sets.reduce(
+          (sum, set) => sum + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0
+        );
+        return { date: new Date(s.completedAt), value: strengthMetric === 'maxWeight' ? maxW : vol };
+      });
+
+    let filteredData = [];
+    let labels = [];
+    const now = new Date();
+
+    switch (timeView) {
+      case 'week': {
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() - currentWeekOffset * 7);
+        labels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        for (let i = 0; i < 7; i++) {
+          const target = new Date(weekStart);
+          target.setDate(weekStart.getDate() + i);
+          const key = toKey(target);
+          const pts = sessionPoints.filter(p => toKey(p.date) === key);
+          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+        }
+        break;
+      }
+      case 'month': {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
+        const daysInMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+        for (let i = 1; i <= daysInMonth; i++) {
+          if (i % 5 === 1) labels.push(i.toString());
+          const target = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
+          const key = toKey(target);
+          const pts = sessionPoints.filter(p => toKey(p.date) === key);
+          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+        }
+        break;
+      }
+      case 'year': {
+        const year = now.getFullYear() - currentYearOffset;
+        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        for (let month = 0; month < 12; month++) {
+          const pts = sessionPoints.filter(p => p.date.getFullYear() === year && p.date.getMonth() === month);
+          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+        }
+        break;
+      }
+      case 'allTime': {
+        const allMonths = {};
+        sessionPoints.forEach(p => {
+          const key = `${p.date.getFullYear()}-${p.date.getMonth()}`;
+          if (!allMonths[key]) allMonths[key] = [];
+          allMonths[key].push(p.value);
+        });
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        Object.keys(allMonths).sort().slice(-12).forEach(key => {
+          const [year, month] = key.split('-');
+          labels.push(`${MONTHS[parseInt(month)]} ${year.slice(-2)}`);
+          filteredData.push(Math.max(...allMonths[key]));
+        });
+        break;
+      }
+      case 'custom': {
+        if (!customStartDate || !customEndDate) break;
+        const startD = new Date(customStartDate + 'T00:00:00');
+        const endD = new Date(customEndDate + 'T00:00:00');
+        const totalDays = Math.round((endD - startD) / (1000 * 60 * 60 * 24)) + 1;
+        const labelEvery = totalDays <= 14 ? 2 : totalDays <= 31 ? 5 : 7;
+        for (let i = 0; i < totalDays; i++) {
+          const target = new Date(startD);
+          target.setDate(startD.getDate() + i);
+          const key = toKey(target);
+          const pts = sessionPoints.filter(p => toKey(p.date) === key);
+          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+          if (i === 0 || i % labelEvery === 0) labels.push(`${target.getMonth() + 1}/${target.getDate()}`);
+        }
+        break;
+      }
+    }
+    return { labels, data: filteredData };
+  };
+
 
   const getPeriodLabel = () => {
     const now = new Date();
@@ -366,6 +528,13 @@ const ProgressScreen = () => {
       }
       case 'year':
         return String(now.getFullYear() - currentYearOffset);
+      case 'custom': {
+        if (customStartDate && customEndDate) {
+          const fmt = key => new Date(key + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return `${fmt(customStartDate)} – ${fmt(customEndDate)}`;
+        }
+        return 'Select range';
+      }
       default:
         return 'All Time';
     }
@@ -380,7 +549,9 @@ const ProgressScreen = () => {
   const isAtPresent = (
     (timeView === 'week' && currentWeekOffset === 0) ||
     (timeView === 'month' && currentMonthOffset === 0) ||
-    (timeView === 'year' && currentYearOffset === 0)
+    (timeView === 'year' && currentYearOffset === 0) ||
+    timeView === 'allTime' ||
+    timeView === 'custom'
   );
 
   const getBigNumber = data => {
@@ -392,31 +563,27 @@ const ProgressScreen = () => {
   const getTrend = data => {
     const nonZero = data.filter(v => v > 0);
     if (nonZero.length < 2) return null;
-    const first = nonZero[0];
-    const last = nonZero[nonZero.length - 1];
-    const pct = ((last - first) / first) * 100;
+    const pct = ((nonZero[nonZero.length - 1] - nonZero[0]) / nonZero[0]) * 100;
     return pct;
   };
 
-  const CARDIO_EXERCISES = ['Running', 'Cycling', 'Swimming'];
-  const isCardio = selectedExercise && CARDIO_EXERCISES.includes(selectedExercise);
-
   const bodyChart = getBodyChartData();
-  const exChart = getExerciseChartData();
+  const strChart = getStrengthChartData();
 
   const activeBodyMetric = BODY_METRICS.find(m => m.id === selectedMetric);
-  const activeCardioMetric = CARDIO_METRICS.find(m => m.id === cardioMetric);
+  const activeStrengthMetric = STRENGTH_METRICS.find(m => m.id === strengthMetric);
 
   const bodyBigNum = getBigNumber(bodyChart.data);
   const bodyTrend = getTrend(bodyChart.data);
-  const exBigNum = getBigNumber(exChart.data);
-  const exTrend = getTrend(exChart.data);
+  const strBigNum = getBigNumber(strChart.data);
+  const strTrend = getTrend(strChart.data);
 
   const PERIOD_TABS = [
     { id: 'week',    label: 'Week' },
     { id: 'month',   label: 'Month' },
     { id: 'year',    label: 'Year' },
     { id: 'allTime', label: 'All' },
+    { id: 'custom',  label: 'Custom' },
   ];
 
   const setView = id => {
@@ -424,7 +591,95 @@ const ProgressScreen = () => {
     setCurrentWeekOffset(0);
     setCurrentMonthOffset(0);
     setCurrentYearOffset(0);
+    if (id === 'custom') setCustomPickerVisible(true);
   };
+
+  // Best ever set for selected exercise
+  const personalBest = useMemo(() => {
+    if (!selectedExercise) return null;
+    let best = 0;
+    workoutHistory.forEach(s => {
+      s.exercises?.forEach(e => {
+        if (e.name === selectedExercise) {
+          e.sets.forEach(set => { best = Math.max(best, parseFloat(set.weight) || 0); });
+        }
+      });
+    });
+    return best > 0 ? best : null;
+  }, [workoutHistory, selectedExercise]);
+
+  // Sessions for the currently selected period (used for Stats card)
+  const rangeSessionsForStats = useMemo(() => {
+    if (!selectedExercise) return [];
+    const now = new Date();
+    let startKey, endKey;
+    switch (timeView) {
+      case 'week': {
+        const ws = new Date(now);
+        ws.setDate(ws.getDate() - ws.getDay() - currentWeekOffset * 7);
+        startKey = toKey(ws);
+        const we = new Date(ws); we.setDate(ws.getDate() + 6);
+        endKey = toKey(we);
+        break;
+      }
+      case 'month': {
+        const m = new Date(now.getFullYear(), now.getMonth() - currentMonthOffset, 1);
+        startKey = toKey(new Date(m.getFullYear(), m.getMonth(), 1));
+        endKey = toKey(new Date(m.getFullYear(), m.getMonth() + 1, 0));
+        break;
+      }
+      case 'year': {
+        const y = now.getFullYear() - currentYearOffset;
+        startKey = `${y}-01-01`; endKey = `${y}-12-31`;
+        break;
+      }
+      case 'custom':
+        startKey = customStartDate; endKey = customEndDate;
+        break;
+      default:
+        startKey = '2000-01-01'; endKey = '2099-12-31';
+    }
+    if (!startKey || !endKey) return [];
+    return workoutHistory.filter(s => {
+      const k = toKey(new Date(s.completedAt));
+      return k >= startKey && k <= endKey && s.exercises?.some(e => e.name === selectedExercise);
+    });
+  }, [selectedExercise, workoutHistory, timeView, currentWeekOffset, currentMonthOffset, currentYearOffset, customStartDate, customEndDate]);
+
+  // Stats summary for the selected period + exercise
+  const exerciseStats = useMemo(() => {
+    if (!selectedExercise || rangeSessionsForStats.length === 0) return null;
+    let totalSets = 0;
+    rangeSessionsForStats.forEach(s => {
+      s.exercises?.forEach(e => {
+        if (e.name === selectedExercise) {
+          totalSets += e.sets.filter(set => includeWarmupInStats || !set.warmup).length;
+        }
+      });
+    });
+    const sorted = [...rangeSessionsForStats].sort((a, b) => new Date(a.completedAt) - new Date(b.completedAt));
+    let pctImprovement = null;
+    if (sorted.length >= 2) {
+      const firstMax = sorted[0].exercises.find(e => e.name === selectedExercise)
+        .sets.reduce((m, s) => Math.max(m, parseFloat(s.weight) || 0), 0);
+      const lastMax = sorted[sorted.length - 1].exercises.find(e => e.name === selectedExercise)
+        .sets.reduce((m, s) => Math.max(m, parseFloat(s.weight) || 0), 0);
+      if (firstMax > 0) pctImprovement = ((lastMax - firstMax) / firstMax) * 100;
+    }
+    return { totalSessions: rangeSessionsForStats.length, totalSets, pb: personalBest, pctImprovement };
+  }, [selectedExercise, rangeSessionsForStats, includeWarmupInStats, personalBest]);
+
+  // Sessions in the selected period for the recent sessions list
+  const recentStrengthSessions = useMemo(() => {
+    if (!selectedExercise) return [];
+    return [...rangeSessionsForStats]
+      .sort((a, b) => new Date(b.completedAt) - new Date(a.completedAt))
+      .slice(0, 5)
+      .map(s => ({
+        date: s.completedAt,
+        sets: s.exercises.find(e => e.name === selectedExercise).sets,
+      }));
+  }, [rangeSessionsForStats, selectedExercise]);
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 36 }}>
@@ -433,7 +688,7 @@ const ProgressScreen = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Progress</Text>
         <View style={styles.typePill}>
-          {['body', 'exercise'].map((type, i) => (
+          {['body', 'exercise'].map(type => (
             <TouchableOpacity
               key={type}
               style={[styles.typePillBtn, progressType === type && styles.typePillBtnActive]}
@@ -450,7 +705,6 @@ const ProgressScreen = () => {
       {/* ── BODY METRICS ─────────────────────────────────────────────────── */}
       {progressType === 'body' && (
         <>
-          {/* Metric pills */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -470,7 +724,6 @@ const ProgressScreen = () => {
             ))}
           </ScrollView>
 
-          {/* Period tabs */}
           <View style={styles.periodSelector}>
             {PERIOD_TABS.map(t => (
               <TouchableOpacity
@@ -485,7 +738,6 @@ const ProgressScreen = () => {
             ))}
           </View>
 
-          {/* Chart card */}
           <View style={styles.chartCard}>
             <View style={styles.chartCardTop}>
               <View>
@@ -517,31 +769,40 @@ const ProgressScreen = () => {
               )}
             </View>
 
-            {/* Period nav */}
-            {timeView !== 'allTime' && (
+            {timeView !== 'allTime' && timeView !== 'custom' && (
               <View style={styles.periodNav}>
                 <TouchableOpacity onPress={() => handleSwipe(1)} style={styles.navBtn}>
                   <Ionicons name="chevron-back" size={18} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
-                <TouchableOpacity
-                  onPress={() => handleSwipe(-1)}
-                  style={styles.navBtn}
-                  disabled={isAtPresent}
-                >
+                <View style={styles.periodNavCenter}>
+                  <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
+                  {!isAtPresent && (
+                    <TouchableOpacity
+                      style={styles.nowBtn}
+                      onPress={() => { setCurrentWeekOffset(0); setCurrentMonthOffset(0); setCurrentYearOffset(0); }}
+                    >
+                      <Ionicons name="return-up-forward-outline" size={12} color={Colors.background} />
+                      <Text style={styles.nowBtnText}>Today</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => handleSwipe(-1)} style={styles.navBtn} disabled={isAtPresent}>
                   <Ionicons name="chevron-forward" size={18} color={isAtPresent ? Colors.gray : Colors.text} />
                 </TouchableOpacity>
               </View>
             )}
+            {timeView === 'custom' && (
+              <TouchableOpacity style={styles.customRangeNav} onPress={() => setCustomPickerVisible(true)}>
+                <Ionicons name="calendar-outline" size={14} color={Colors.text} />
+                <Text style={styles.customRangeNavText}>{getPeriodLabel()}</Text>
+                <Ionicons name="pencil-outline" size={12} color={Colors.gray} />
+              </TouchableOpacity>
+            )}
 
-            <LineChartSVG
-              data={bodyChart.data}
-              labels={bodyChart.labels}
-              color={activeBodyMetric.color}
-            />
+            <LineChartSVG data={bodyChart.data} labels={bodyChart.labels} color={activeBodyMetric.color} unit={activeBodyMetric.unit} />
           </View>
 
-          {/* Current Stats card */}
+          {/* Current Stats */}
           <View style={styles.statsCard}>
             <View style={styles.statsCardHeader}>
               <Text style={styles.statsCardTitle}>CURRENT STATS</Text>
@@ -563,7 +824,7 @@ const ProgressScreen = () => {
             </View>
           </View>
 
-          {/* Goals card */}
+          {/* Goals */}
           <View style={styles.statsCard}>
             <View style={styles.statsCardHeader}>
               <Text style={styles.statsCardTitle}>GOALS</Text>
@@ -589,44 +850,30 @@ const ProgressScreen = () => {
       {/* ── EXERCISE PROGRESS ────────────────────────────────────────────── */}
       {progressType === 'exercise' && (
         <>
-          {/* Exercise picker */}
           <TouchableOpacity style={styles.exercisePicker} onPress={() => setExerciseModalVisible(true)}>
             <View style={styles.exercisePickerLeft}>
-              {selectedExercise ? (
-                <>
-                  <View style={[styles.exercisePickerIcon, { backgroundColor: `${(EXERCISE_ICONS[selectedExercise] || {}).color || Colors.text}20` }]}>
-                    <Ionicons
-                      name={(EXERCISE_ICONS[selectedExercise] || { icon: 'barbell-outline' }).icon}
-                      size={18}
-                      color={(EXERCISE_ICONS[selectedExercise] || { color: Colors.text }).color}
-                    />
-                  </View>
-                  <Text style={styles.exercisePickerText}>{selectedExercise}</Text>
-                </>
-              ) : (
-                <>
-                  <View style={[styles.exercisePickerIcon, { backgroundColor: 'rgba(107,114,128,0.15)' }]}>
-                    <Ionicons name="search-outline" size={18} color={Colors.gray} />
-                  </View>
-                  <Text style={[styles.exercisePickerText, { color: Colors.gray }]}>Select an exercise</Text>
-                </>
-              )}
+              <View style={[styles.exercisePickerIcon, { backgroundColor: selectedExercise ? 'rgba(255,255,255,0.08)' : 'rgba(107,114,128,0.15)' }]}>
+                <Ionicons name="barbell-outline" size={18} color={selectedExercise ? Colors.text : Colors.gray} />
+              </View>
+              <Text style={[styles.exercisePickerText, !selectedExercise && { color: Colors.gray }]}>
+                {selectedExercise || 'Select an exercise'}
+              </Text>
             </View>
             <Ionicons name="chevron-down" size={18} color={Colors.gray} />
           </TouchableOpacity>
 
-          {selectedExercise && isCardio && (
+          {selectedExercise && (
             <>
-              {/* Cardio metric pills */}
-              <View style={styles.pillScroll}>
+              {/* Strength metric pills */}
+              <View style={[styles.pillScroll, { marginBottom: 12 }]}>
                 <View style={[styles.pillScrollContent, { flexDirection: 'row', gap: 10 }]}>
-                  {CARDIO_METRICS.map(m => (
+                  {STRENGTH_METRICS.map(m => (
                     <TouchableOpacity
                       key={m.id}
-                      style={[styles.metricPill, cardioMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
-                      onPress={() => setCardioMetric(m.id)}
+                      style={[styles.metricPill, strengthMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
+                      onPress={() => setStrengthMetric(m.id)}
                     >
-                      <Text style={[styles.metricPillText, cardioMetric === m.id && styles.metricPillTextActive]}>
+                      <Text style={[styles.metricPillText, strengthMetric === m.id && styles.metricPillTextActive]}>
                         {m.label}
                       </Text>
                     </TouchableOpacity>
@@ -653,92 +900,174 @@ const ProgressScreen = () => {
               <View style={styles.chartCard}>
                 <View style={styles.chartCardTop}>
                   <View>
-                    <Text style={styles.chartCardLabel}>{activeCardioMetric.label.toUpperCase()}</Text>
+                    <Text style={styles.chartCardLabel}>{activeStrengthMetric.label.toUpperCase()}</Text>
                     <View style={styles.chartCardValueRow}>
-                      {exBigNum !== null ? (
+                      {strBigNum !== null ? (
                         <>
-                          <Text style={[styles.chartCardBigValue, { color: activeCardioMetric.color }]}>
-                            {exBigNum.toFixed(2)}
+                          <Text style={[styles.chartCardBigValue, { color: activeStrengthMetric.color }]}>
+                            {strBigNum % 1 === 0 ? strBigNum : strBigNum.toFixed(1)}
                           </Text>
-                          <Text style={styles.chartCardUnit}> {activeCardioMetric.unit}</Text>
+                          <Text style={styles.chartCardUnit}> {activeStrengthMetric.unit}</Text>
                         </>
                       ) : (
                         <Text style={styles.chartCardNoData}>—</Text>
                       )}
                     </View>
                   </View>
-                  {exTrend !== null && (
-                    <View style={[styles.trendBadge, { backgroundColor: exTrend >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
+                  <View style={styles.pbBadge}>
+                    <Text style={styles.pbLabel}>PB</Text>
+                    <Text style={styles.pbValue}>{personalBest !== null ? `${personalBest} kg` : '—'}</Text>
+                  </View>
+                  {strTrend !== null && (
+                    <View style={[styles.trendBadge, { backgroundColor: strTrend >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
                       <Ionicons
-                        name={exTrend >= 0 ? 'trending-up' : 'trending-down'}
+                        name={strTrend >= 0 ? 'trending-up' : 'trending-down'}
                         size={12}
-                        color={exTrend >= 0 ? Colors.green : Colors.softRed}
+                        color={strTrend >= 0 ? Colors.green : Colors.softRed}
                       />
-                      <Text style={[styles.trendText, { color: exTrend >= 0 ? Colors.green : Colors.softRed }]}>
-                        {' '}{exTrend >= 0 ? '+' : ''}{exTrend.toFixed(1)}%
+                      <Text style={[styles.trendText, { color: strTrend >= 0 ? Colors.green : Colors.softRed }]}>
+                        {' '}{strTrend >= 0 ? '+' : ''}{strTrend.toFixed(1)}%
                       </Text>
                     </View>
                   )}
                 </View>
 
-                {timeView !== 'allTime' && (
+                {timeView !== 'allTime' && timeView !== 'custom' && (
                   <View style={styles.periodNav}>
                     <TouchableOpacity onPress={() => handleSwipe(1)} style={styles.navBtn}>
                       <Ionicons name="chevron-back" size={18} color={Colors.text} />
                     </TouchableOpacity>
-                    <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
-                    <TouchableOpacity
-                      onPress={() => handleSwipe(-1)}
-                      style={styles.navBtn}
-                      disabled={isAtPresent}
-                    >
+                    <View style={styles.periodNavCenter}>
+                      <Text style={styles.periodNavLabel}>{getPeriodLabel()}</Text>
+                      {!isAtPresent && (
+                        <TouchableOpacity
+                          style={styles.nowBtn}
+                          onPress={() => { setCurrentWeekOffset(0); setCurrentMonthOffset(0); setCurrentYearOffset(0); }}
+                        >
+                          <Ionicons name="return-up-forward-outline" size={12} color={Colors.background} />
+                          <Text style={styles.nowBtnText}>Today</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <TouchableOpacity onPress={() => handleSwipe(-1)} style={styles.navBtn} disabled={isAtPresent}>
                       <Ionicons name="chevron-forward" size={18} color={isAtPresent ? Colors.gray : Colors.text} />
                     </TouchableOpacity>
                   </View>
                 )}
+                {timeView === 'custom' && (
+                  <TouchableOpacity style={styles.customRangeNav} onPress={() => setCustomPickerVisible(true)}>
+                    <Ionicons name="calendar-outline" size={14} color={Colors.text} />
+                    <Text style={styles.customRangeNavText}>{getPeriodLabel()}</Text>
+                    <Ionicons name="pencil-outline" size={12} color={Colors.gray} />
+                  </TouchableOpacity>
+                )}
 
-                <LineChartSVG
-                  data={exChart.data}
-                  labels={exChart.labels}
-                  color={activeCardioMetric.color}
-                />
+                <LineChartSVG data={strChart.data} labels={strChart.labels} color={activeStrengthMetric.color} unit={activeStrengthMetric.unit} />
               </View>
 
-              {/* Recent sessions */}
-              <Text style={styles.sessionsTitle}>RECENT SESSIONS</Text>
-              {(exerciseData[selectedExercise] || [])
-                .slice()
-                .sort((a, b) => new Date(b.date) - new Date(a.date))
-                .slice(0, 5)
-                .map((item, idx) => (
-                  <View key={idx} style={[styles.sessionCard, { borderLeftColor: (EXERCISE_ICONS[selectedExercise] || { color: Colors.text }).color }]}>
-                    <Text style={styles.sessionDate}>{friendlyDate(item.date)}</Text>
-                    <View style={styles.sessionRow}>
-                      {[
-                        { l: 'Distance', v: `${item.distance} km` },
-                        { l: 'Duration', v: `${item.duration} min` },
-                        { l: 'Pace',     v: `${item.pace} min/km` },
-                      ].map(s => (
-                        <View key={s.l} style={styles.sessionStat}>
-                          <Text style={styles.sessionStatLabel}>{s.l}</Text>
-                          <Text style={styles.sessionStatValue}>{s.v}</Text>
-                        </View>
-                      ))}
+              {/* Stats summary for selected period */}
+              {exerciseStats && (
+                <View style={styles.statsCard}>
+                  <View style={styles.statsCardHeader}>
+                    <Text style={styles.statsCardTitle}>STATS · {getPeriodLabel().toUpperCase()}</Text>
+                    <TouchableOpacity
+                      style={styles.warmupToggleRow}
+                      onPress={() => setIncludeWarmupInStats(v => !v)}
+                    >
+                      <Text style={styles.warmupToggleLabel}>Warmup</Text>
+                      <View style={[styles.togglePill, includeWarmupInStats && styles.togglePillActive]}>
+                        <View style={[styles.toggleThumb, includeWarmupInStats && styles.toggleThumbActive]} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Sessions</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.totalSessions}</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Sets</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.totalSets}</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>PB</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.pb !== null ? `${exerciseStats.pb}kg` : '—'}</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Change</Text>
+                      <Text style={[
+                        styles.statItemValue,
+                        exerciseStats.pctImprovement !== null && {
+                          color: exerciseStats.pctImprovement >= 0 ? Colors.green : Colors.softRed,
+                        },
+                      ]}>
+                        {exerciseStats.pctImprovement !== null
+                          ? `${exerciseStats.pctImprovement >= 0 ? '+' : ''}${exerciseStats.pctImprovement.toFixed(1)}%`
+                          : '—'}
+                      </Text>
                     </View>
                   </View>
-                ))}
+                </View>
+              )}
+
+              {/* Recent sessions — collapsible */}
+              {recentStrengthSessions.length > 0 && (
+                <>
+                  <TouchableOpacity
+                    style={styles.sessionsSectionHeader}
+                    onPress={() => setSessionsExpanded(v => !v)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.sessionsTitle}>RECENT SESSIONS</Text>
+                    <View style={styles.sessionsBadgeRow}>
+                      <View style={styles.sessionsBadge}>
+                        <Text style={styles.sessionsBadgeText}>{recentStrengthSessions.length}</Text>
+                      </View>
+                      <Ionicons
+                        name={sessionsExpanded ? 'chevron-up' : 'chevron-down'}
+                        size={16}
+                        color={Colors.gray}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {sessionsExpanded && recentStrengthSessions.map((item, idx) => (
+                    <View key={idx} style={styles.sessionCard}>
+                      <Text style={styles.sessionDate}>{friendlyDate(item.date)}</Text>
+                      <View style={styles.setsHeader}>
+                        <Text style={styles.setCol}>Set</Text>
+                        <Text style={styles.setCol}>Weight</Text>
+                        <Text style={styles.setCol}>Reps</Text>
+                        <Text style={styles.setCol}>Volume</Text>
+                      </View>
+                      {item.sets.map((set, si) => {
+                        const w = parseFloat(set.weight) || 0;
+                        const r = parseInt(set.reps) || 0;
+                        return (
+                          <View key={si} style={styles.setRow}>
+                            <Text style={styles.setCell}>{si + 1}</Text>
+                            <Text style={styles.setCell}>{w > 0 ? `${w} kg` : '—'}</Text>
+                            <Text style={styles.setCell}>{r}</Text>
+                            <Text style={styles.setCell}>{w > 0 && r > 0 ? `${(w * r).toFixed(0)} kg` : '—'}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                </>
+              )}
             </>
           )}
 
-          {selectedExercise && !isCardio && (
+          {!selectedExercise && availableExercises.length === 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="barbell-outline" size={36} color={Colors.gray} />
-              <Text style={styles.emptyStateTitle}>Strength Tracking</Text>
-              <Text style={styles.emptyStateText}>Coming soon — weight progression charts for {selectedExercise}.</Text>
+              <Text style={styles.emptyStateTitle}>No exercises logged yet</Text>
+              <Text style={styles.emptyStateText}>Log a workout session to start tracking your progress.</Text>
             </View>
           )}
 
-          {!selectedExercise && (
+          {!selectedExercise && availableExercises.length > 0 && (
             <View style={styles.emptyState}>
               <Ionicons name="analytics-outline" size={36} color={Colors.gray} />
               <Text style={styles.emptyStateTitle}>Pick an exercise</Text>
@@ -748,31 +1077,56 @@ const ProgressScreen = () => {
         </>
       )}
 
+      {/* ── DATE RANGE PICKER ────────────────────────────────────────────── */}
+      <DateRangePicker
+        visible={customPickerVisible}
+        start={customStartDate}
+        end={customEndDate}
+        onApply={(s, e) => { setCustomStartDate(s); setCustomEndDate(e); setCustomPickerVisible(false); }}
+        onClose={() => setCustomPickerVisible(false)}
+      />
+
       {/* ── EXERCISE PICKER MODAL ────────────────────────────────────────── */}
       <Modal animationType="slide" transparent visible={exerciseModalVisible} onRequestClose={() => setExerciseModalVisible(false)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setExerciseModalVisible(false)} />
         <View style={styles.bottomSheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>Select Exercise</Text>
-          <FlatList
-            data={availableExercises}
-            keyExtractor={item => item}
-            renderItem={({ item }) => {
-              const meta = EXERCISE_ICONS[item] || { icon: 'barbell-outline', color: Colors.text };
-              return (
+          <View style={styles.searchRow}>
+            <Ionicons name="search-outline" size={16} color={Colors.gray} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search exercises..."
+              placeholderTextColor={Colors.gray}
+              value={exerciseSearch}
+              onChangeText={setExerciseSearch}
+            />
+          </View>
+          {filteredExercises.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={[styles.emptyStateText, { marginTop: 16 }]}>
+                {availableExercises.length === 0 ? 'No exercises logged yet.' : 'No matches found.'}
+              </Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredExercises}
+              keyExtractor={item => item}
+              renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.sheetItem}
-                  onPress={() => { setSelectedExercise(item); setExerciseModalVisible(false); }}
+                  onPress={() => { setSelectedExercise(item); setExerciseModalVisible(false); setExerciseSearch(''); setSessionsExpanded(false); }}
                 >
-                  <View style={[styles.sheetItemIcon, { backgroundColor: `${meta.color}20` }]}>
-                    <Ionicons name={meta.icon} size={18} color={meta.color} />
+                  <View style={styles.sheetItemIcon}>
+                    <Ionicons name="barbell-outline" size={18} color={Colors.text} />
                   </View>
                   <Text style={styles.sheetItemText}>{item}</Text>
                   {selectedExercise === item && <Ionicons name="checkmark" size={18} color={Colors.text} />}
                 </TouchableOpacity>
-              );
-            }}
-          />
+              )}
+              keyboardShouldPersistTaps="handled"
+            />
+          )}
         </View>
       </Modal>
 
@@ -860,7 +1214,6 @@ const friendlyDate = iso => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
 
-  // Header
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 52, paddingBottom: 16,
@@ -877,7 +1230,6 @@ const styles = StyleSheet.create({
   typePillText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
   typePillTextActive: { color: '#FFFFFF' },
 
-  // Metric pills
   pillScroll: { marginBottom: 12 },
   pillScrollContent: { paddingHorizontal: 18, gap: 8 },
   metricPill: {
@@ -888,7 +1240,6 @@ const styles = StyleSheet.create({
   metricPillText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
   metricPillTextActive: { color: '#FFFFFF' },
 
-  // Period tabs
   periodSelector: {
     flexDirection: 'row', marginHorizontal: 18, marginBottom: 14,
     backgroundColor: Colors.cardBackground, borderRadius: 12, padding: 4,
@@ -899,7 +1250,6 @@ const styles = StyleSheet.create({
   periodBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
   periodBtnTextActive: { color: '#FFFFFF' },
 
-  // Chart card
   chartCard: {
     marginHorizontal: 18, marginBottom: 14, padding: 18,
     backgroundColor: Colors.cardBackground,
@@ -916,24 +1266,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
   },
   trendText: { fontSize: 12, fontWeight: '600' },
+  pbBadge: { alignItems: 'center' },
+  pbLabel: { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.4 },
+  pbValue: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 
-  // Period nav
   periodNav: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 12,
   },
   navBtn: { padding: 4 },
+  periodNavCenter: { alignItems: 'center', gap: 4 },
   periodNavLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  nowBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
+    backgroundColor: Colors.text,
+  },
+  nowBtnText: { fontSize: 12, fontWeight: '700', color: Colors.background },
 
-  // Chart labels
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
   chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
 
-  // Empty chart
+  tooltip: {
+    position: 'absolute',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 6, borderWidth: 1,
+    paddingHorizontal: 8, paddingVertical: 5,
+    alignItems: 'center',
+  },
+  tooltipText: { fontSize: 12, fontWeight: '700', color: '#FFFFFF' },
+
   emptyChart: { height: 110, alignItems: 'center', justifyContent: 'center', gap: 8 },
   emptyChartText: { fontSize: 13, color: Colors.gray },
 
-  // Stats + Goals cards
   statsCard: {
     marginHorizontal: 18, marginBottom: 14, padding: 16,
     backgroundColor: Colors.cardBackground, borderRadius: 16,
@@ -947,7 +1312,6 @@ const styles = StyleSheet.create({
   statItemValue: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   inputLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600', marginBottom: 6 },
 
-  // Exercise picker
   exercisePicker: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 18, marginBottom: 14, padding: 14,
@@ -958,24 +1322,28 @@ const styles = StyleSheet.create({
   exercisePickerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   exercisePickerText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
 
-  // Session cards
-  sessionsTitle: {
-    fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6,
-    marginHorizontal: 18, marginBottom: 10,
+  sessionsSectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 18, marginBottom: 10, paddingVertical: 4,
   },
+  sessionsTitle: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6 },
+  sessionsBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sessionsBadge: {
+    backgroundColor: Colors.cardBackground, borderWidth: 1, borderColor: Colors.borderColor,
+    borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2,
+  },
+  sessionsBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.gray },
   sessionCard: {
     marginHorizontal: 18, marginBottom: 10, padding: 14,
     backgroundColor: Colors.cardBackground, borderRadius: 14,
     borderWidth: 1, borderColor: Colors.borderColor,
-    borderLeftWidth: 3,
   },
   sessionDate: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', marginBottom: 10 },
-  sessionRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  sessionStat: { alignItems: 'center' },
-  sessionStatLabel: { fontSize: 10, color: Colors.gray, fontWeight: '500', letterSpacing: 0.4, marginBottom: 3 },
-  sessionStatValue: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  setsHeader: { flexDirection: 'row', marginBottom: 6 },
+  setRow: { flexDirection: 'row', paddingVertical: 4, borderTopWidth: 1, borderTopColor: Colors.borderColor },
+  setCol: { flex: 1, fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.4 },
+  setCell: { flex: 1, fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 
-  // Empty state
   emptyState: {
     marginHorizontal: 18, marginTop: 16, padding: 36,
     backgroundColor: Colors.cardBackground, borderRadius: 18,
@@ -985,7 +1353,6 @@ const styles = StyleSheet.create({
   emptyStateTitle: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
   emptyStateText: { fontSize: 13, color: Colors.gray, textAlign: 'center', lineHeight: 20 },
 
-  // Modals
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   bottomSheet: {
     backgroundColor: Colors.cardBackground,
@@ -998,21 +1365,49 @@ const styles = StyleSheet.create({
     width: 36, height: 4, borderRadius: 2,
     backgroundColor: Colors.borderColor, alignSelf: 'center', marginBottom: 16,
   },
-  sheetTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 16 },
+  sheetTitle: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 12 },
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: Colors.background, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: Colors.borderColor, marginBottom: 12,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: '#FFFFFF' },
   sheetItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: Colors.borderColor,
   },
-  sheetItemIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sheetItemIcon: {
+    width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
   sheetItemText: { flex: 1, fontSize: 15, color: '#FFFFFF', fontWeight: '500' },
 
-  // Log modal
   input: {
     borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 12,
     padding: 14, fontSize: 16, marginBottom: 16,
     color: '#FFFFFF', backgroundColor: Colors.background,
   },
+
+  customRangeNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, marginBottom: 12,
+    paddingVertical: 8, paddingHorizontal: 14,
+    backgroundColor: 'rgba(88,216,219,0.08)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(88,216,219,0.2)',
+  },
+  customRangeNavText: { fontSize: 13, fontWeight: '600', color: Colors.text },
+
+  warmupToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  warmupToggleLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
+  togglePill: {
+    width: 32, height: 18, borderRadius: 9, backgroundColor: Colors.borderColor,
+    justifyContent: 'center', paddingHorizontal: 2,
+  },
+  togglePillActive: { backgroundColor: Colors.text },
+  toggleThumb: { width: 14, height: 14, borderRadius: 7, backgroundColor: Colors.gray },
+  toggleThumbActive: { alignSelf: 'flex-end', backgroundColor: Colors.background },
+
   modalBtns: { flexDirection: 'row', gap: 10 },
   cancelBtn: {
     flex: 1, paddingVertical: 14, borderRadius: 12,
@@ -1025,6 +1420,63 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, alignItems: 'center',
   },
   saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+});
+
+const CELL_SIZE = Math.floor((SCREEN_WIDTH - 48 - 32) / 7); // sheet padding 24*2 + inner padding 16*2
+
+const pickerStyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  sheet: {
+    backgroundColor: Colors.cardBackground,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, paddingBottom: 40,
+    borderTopWidth: 1, borderTopColor: Colors.borderColor,
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: Colors.borderColor, alignSelf: 'center', marginBottom: 16,
+  },
+  title: { fontSize: 18, fontWeight: '700', color: '#FFFFFF', marginBottom: 16 },
+
+  monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  navBtn: { padding: 6 },
+  monthLabel: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+
+  dayHeaders: { flexDirection: 'row', marginBottom: 8 },
+  dayHeader: { width: CELL_SIZE, textAlign: 'center', fontSize: 11, color: Colors.gray, fontWeight: '700' },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+  cell: {
+    width: CELL_SIZE, height: CELL_SIZE,
+    alignItems: 'center', justifyContent: 'center',
+    borderRadius: CELL_SIZE / 2,
+  },
+  cellEmpty: { opacity: 0 },
+  cellInRange: { backgroundColor: 'rgba(88,216,219,0.15)', borderRadius: 0 },
+  cellEndpoint: { backgroundColor: Colors.text, borderRadius: CELL_SIZE / 2 },
+  cellText: { fontSize: 14, color: '#FFFFFF', fontWeight: '500' },
+  cellInRangeText: { color: Colors.text, fontWeight: '600' },
+  cellEndpointText: { color: Colors.background, fontWeight: '700' },
+
+  rangeSummary: {
+    alignItems: 'center', marginBottom: 16,
+    paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.background,
+    borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  rangeSummaryText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
+
+  btnRow: { flexDirection: 'row', gap: 10 },
+  cancelBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.borderColor, alignItems: 'center',
+  },
+  cancelBtnText: { fontSize: 15, fontWeight: '600', color: Colors.gray },
+  applyBtn: {
+    flex: 1, paddingVertical: 14, borderRadius: 12,
+    backgroundColor: Colors.primary, alignItems: 'center',
+  },
+  applyBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 });
 
 export default ProgressScreen;

@@ -138,13 +138,50 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   const cardRefs = useRef({});
 
   const workoutCategories = {
-    'Upper Body Push': ['Push-ups','Bench press (barbell)','Bench press (dumbbell)','Incline bench press','Overhead press','Shoulder press (dumbbell)','Arnold press','Lateral raises','Front raises','Tricep dips','Close-grip bench press','Tricep pushdowns','Overhead tricep extension'],
-    'Upper Body Pull': ['Pull-ups','Chin-ups','Lat pulldowns','Seated cable rows','Bent-over barbell rows','T-bar rows','One-arm dumbbell rows','Face pulls','Barbell curls','Dumbbell curls','Hammer curls','Preacher curls','Cable curls'],
-    'Lower Body': ['Squats (bodyweight)','Back squats (barbell)','Front squats','Bulgarian split squats','Lunges','Walking lunges','Deadlifts (conventional)','Romanian deadlifts','Hip thrusts','Glute bridges','Leg press','Leg extensions','Leg curls','Calf raises (standing)','Calf raises (seated)'],
-    'Core & Abs': ['Planks','Side planks','Crunches','Bicycle crunches','Russian twists','Mountain climbers','Dead bugs','Hanging knee raises','Leg raises','Sit-ups','Ab wheel rollouts'],
-    'Compound Movements': ['Burpees','Thrusters','Turkish get-ups','Clean and press','Farmer\'s walks','Bear crawls','Renegade rows'],
-    'Machine Exercises': ['Cable crossovers','Pec deck flyes','Machine shoulder press','Lat pulldown variations','Cable bicep curls','Cable tricep extensions','Leg press variations','Smith machine squats'],
-    'Functional & Bodyweight': ['Jump squats','Pistol squats','Wall sits','Box jumps','Pike push-ups','Diamond push-ups','Pull-up variations','Dip variations','Bodyweight rows'],
+    'Upper Body Push': [
+      'Barbell Bench Press','Barbell Overhead Press','Barbell Incline Bench Press','Barbell Close Grip Bench Press','Barbell Skull Crusher','Barbell Upright Row',
+      'Dumbbell Bench Press','Dumbbell Shoulder Press','Dumbbell Incline Bench Press','Dumbbell Arnold Press','Dumbbell Fly','Dumbbell Incline Fly','Dumbbell Lateral Raise','Dumbbell Front Raise','Dumbbell Tricep Kickback','Dumbbell Skull Crusher','Dumbbell Pullover',
+      'Cable Fly','Cable Lateral Raise','Cable Tricep Pushdown','Cable Overhead Tricep Extension',
+      'Kettlebell Press',
+      'EZ Bar Skull Crusher','EZ Bar Overhead Extension',
+      'Resistance Band Tricep Pushdown',
+    ],
+    'Upper Body Pull': [
+      'Barbell Row','Barbell Curl','Barbell Shrug',
+      'Dumbbell Row','Dumbbell Curl','Dumbbell Hammer Curl','Dumbbell Concentration Curl','Dumbbell Wrist Curl','Dumbbell Shrug','Dumbbell Reverse Fly','Dumbbell Zottman Curl','Dumbbell Spider Curl',
+      'Lat Pulldown','Seated Cable Row','Cable Curl','Cable Face Pull',
+      'Kettlebell Row',
+      'EZ Bar Curl','Preacher Curl',
+      'Resistance Band Row','Resistance Band Pull Apart','Resistance Band Curl',
+    ],
+    'Lower Body': [
+      'Barbell Back Squat','Barbell Front Squat','Barbell Deadlift','Barbell Romanian Deadlift','Barbell Hip Thrust','Barbell Lunge','Barbell Sumo Deadlift','Barbell Good Morning',
+      'Dumbbell Romanian Deadlift','Dumbbell Goblet Squat','Dumbbell Lunge','Dumbbell Step Up','Dumbbell Hip Thrust','Dumbbell Calf Raise','Dumbbell Split Squat',
+      'Cable Pull Through','Cable Hip Abduction',
+      'Kettlebell Deadlift',
+      'Resistance Band Squat','Resistance Band Lateral Walk','Resistance Band Hip Thrust',
+      'Hyperextension (Back Extension)',
+    ],
+    'Core & Abs': [
+      'Cable Woodchop','Cable Crunch','Ab Crunch Machine',
+      'Body Saw','Plank','Side Plank','Hollow Body Hold','L-Sit','Front Lever','Back Lever','Human Flag',
+      'Sit-Up','Crunch','Bicycle Crunch','Leg Raise','Hanging Leg Raise','Hanging Knee Raise','Dragon Flag','Ab Wheel Rollout','Russian Twist','V-Up','Toe Touch','Mountain Climber',
+    ],
+    'Compound Movements': [
+      'Barbell Power Clean','Barbell Hang Clean','Barbell Snatch',
+      'Kettlebell Swing','Kettlebell Goblet Squat','Kettlebell Clean','Kettlebell Snatch','Kettlebell Turkish Get-Up','Kettlebell Halo',
+      "Farmer's Walk",'Battle Ropes','Sled Push','Burpee',
+    ],
+    'Machine Exercises': [
+      'Leg Press','Leg Extension','Leg Curl (Lying)','Leg Curl (Seated)','Hack Squat','Smith Machine Squat','Smith Machine Bench Press',
+      'Chest Press Machine','Shoulder Press Machine','Pec Deck Machine','Seated Row Machine','Lat Pullover Machine',
+      'Hip Abduction Machine','Hip Adduction Machine','Calf Raise Machine (Standing)','Calf Raise Machine (Seated)','Back Extension Machine',
+    ],
+    'Functional & Bodyweight': [
+      'Push-Up','Wide Push-Up','Diamond Push-Up','Decline Push-Up','Pike Push-Up','Archer Push-Up','Handstand Push-Up','Dip','Tricep Dip (Bench)',
+      'Pull-Up','Chin-Up','Wide Grip Pull-Up','Muscle-Up','Inverted Row',
+      'Pistol Squat','Bulgarian Split Squat','Bodyweight Squat','Jump Squat','Walking Lunge','Reverse Lunge','Glute Bridge','Single Leg Glute Bridge','Donkey Kick','Fire Hydrant','Clamshell','Bodyweight Hip Thrust','Nordic Curl','Box Jump',
+    ],
     'Cardio': ['Running (treadmill)','Running (outdoor)','Walking (brisk)','Cycling (stationary)','Cycling (outdoor)','Elliptical','Rowing machine','Jump rope','HIIT','Swimming','Dancing','Kickboxing'],
     'Team Sports': ['Basketball','Soccer','Volleyball','American Football','Baseball','Hockey','Rugby'],
     'Racquet Sports': ['Tennis','Badminton','Squash','Table tennis','Pickleball','Racquetball'],
@@ -387,10 +424,6 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
         {daySessions.length === 0 ? (
           <View style={s.noSessionsBox}>
             <Text style={s.noSessionsText}>No sessions on this day</Text>
-            <TouchableOpacity onPress={startEditing} style={[s.addDataBtn, { marginTop: 12 }]}>
-              <Ionicons name="add-circle" size={16} color="#FFFFFF" />
-              <Text style={s.addDataBtnText}>Add Data</Text>
-            </TouchableOpacity>
           </View>
         ) : (
           daySessions.map(session => (
@@ -641,7 +674,9 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
         {/* Calendar header */}
         <View style={[s.calHeader, embedded && { paddingTop: 8 }]}>
           <View>
-            <Text style={s.calYear}>{currentYear}</Text>
+            <TouchableOpacity onPress={() => setShowYearPicker(true)}>
+              <Text style={s.calYear}>{currentYear}</Text>
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowMonthPicker(true)}>
               <Text style={s.calMonth}>{MONTH_NAMES[currentMonth - 1]}</Text>
             </TouchableOpacity>
@@ -752,8 +787,15 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
                         )}
                       </View>
                       {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
-                        <View key={si} style={s.expandSetRow}>
-                          <Text style={s.expandSetLabel}>Set {si + 1}</Text>
+                        <View key={si} style={[s.expandSetRow, set.warmup && s.expandWarmupRow]}>
+                          <View style={s.expandSetLabelRow}>
+                            {set.warmup && (
+                              <View style={s.warmupTag}>
+                                <Text style={s.warmupTagText}>W</Text>
+                              </View>
+                            )}
+                            <Text style={[s.expandSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
+                          </View>
                           <Text style={s.expandSetMeta}>
                             {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
                           </Text>
@@ -998,9 +1040,13 @@ const s = StyleSheet.create({
   expandExHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   expandExName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', flex: 1 },
   expandExSetCount: { fontSize: 12, color: Colors.gray },
-  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
-  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600', width: 50 },
+  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6 },
+  expandWarmupRow: { backgroundColor: 'rgba(251,191,36,0.06)' },
+  expandSetLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600' },
   expandSetMeta: { fontSize: 13, color: Colors.text, fontWeight: '500' },
+  warmupTag: { backgroundColor: Colors.amber, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  warmupTagText: { fontSize: 9, fontWeight: '800', color: Colors.background, letterSpacing: 0.3 },
   expandNotesBlock: { marginTop: 20, padding: 14, backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandNotesLabel: { fontSize: 11, color: Colors.gray, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },

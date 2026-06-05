@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, ActivityIndicator,
+  Dimensions, ActivityIndicator, LayoutAnimation, Platform,
 } from 'react-native';
+import { Pedometer } from 'expo-sensors';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, {
   Circle, Path, Defs, Stop,
@@ -12,6 +13,9 @@ import Svg, {
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
+import HeartRateCard from '../components/HeartRateCard';
+
+if (Platform.OS === 'android') LayoutAnimation.enabled = true;
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_W = SCREEN_WIDTH - 36;
@@ -22,12 +26,13 @@ const DAY_LABELS = ['M','T','W','T','F','S','S'];
 const MON_LABELS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
 
 const GOALS = { calories: 540, minutes: 60, workouts: 1 };
+const STEP_GOAL = 10000;
+const STEP_M = 0.762;
+const DIST_GOAL_KM = 8;
 
 const METRICS = [
   { id: 'calories', label: 'Calories Burned', unit: 'kcal' },
   { id: 'weight',   label: 'Body Weight',     unit: 'kg'   },
-  { id: 'workouts', label: 'Workouts',         unit: ''     },
-  { id: 'duration', label: 'Duration',         unit: 'min'  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -199,24 +204,9 @@ function prevPeriodSum(history, period, metricFn) {
   }).reduce((sum, s) => sum + metricFn(s), 0);
 }
 
-function parseVolume(exercises = []) {
-  return exercises.reduce((total, ex) => {
-    const wMatch = String(ex.weight || '').match(/^(\d+(\.\d+)?)/);
-    const rMatch = String(ex.reps   || '').match(/^(\d+)/);
-    if (!wMatch || !rMatch) return total;
-    return total + parseFloat(wMatch[1]) * parseInt(rMatch[1]) * (ex.sets || 1);
-  }, 0);
-}
-
-function fmtVolume(kg) {
-  if (kg === 0) return '0';
-  return kg >= 1000 ? `${(kg / 1000).toFixed(1)}k` : String(Math.round(kg));
-}
-
-function fmtAbsDiff(curr, prev, fmt = v => String(Math.round(v))) {
-  const diff = curr - prev;
-  const sign = diff >= 0 ? '+' : '−';
-  return `${sign}${fmt(Math.abs(diff))} vs last`;
+function fmtDistance(steps) {
+  const m = steps * STEP_M;
+  return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 }
 
 function fmtPct(curr, prev) {
@@ -252,6 +242,37 @@ const ActivityRing = ({ progress = 0 }) => {
         {Math.round(progress * 100)}%
       </SvgText>
     </Svg>
+  );
+};
+
+// ─── Hourly bar chart ─────────────────────────────────────────────────────────
+
+const HourlyBarChart = ({ data }) => {
+  const maxVal = Math.max(...data, 1);
+  const currentHour = new Date().getHours();
+  return (
+    <View style={styles.hourlyChart}>
+      <View style={styles.hourlyBars}>
+        {data.map((v, h) => (
+          <View
+            key={h}
+            style={[
+              styles.hourlyBar,
+              {
+                height: Math.max((v / maxVal) * 52, v > 0 ? 4 : 1),
+                backgroundColor: h <= currentHour ? Colors.primary : Colors.borderColor,
+                opacity: h <= currentHour ? (v > 0 ? 1 : 0.22) : 0.1,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      <View style={styles.hourlyLabels}>
+        {['12am', '6am', '12pm', '6pm', '12am'].map((l, i) => (
+          <Text key={i} style={styles.hourlyLabel}>{l}</Text>
+        ))}
+      </View>
+    </View>
   );
 };
 
@@ -311,6 +332,11 @@ const HomeScreen = () => {
   const [history, setHistory] = useState([]);
   const [bodyMetrics, setBodyMetrics] = useState([]);
   const [profile, setProfile] = useState(null);
+  const [stepsToday, setStepsToday] = useState(null);
+  const [hourlySteps, setHourlySteps] = useState(Array(24).fill(0));
+  const [pedometerAvailable, setPedometerAvailable] = useState(null);
+  const [stepsExpanded, setStepsExpanded] = useState(false);
+  const [distanceExpanded, setDistanceExpanded] = useState(false);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -325,13 +351,42 @@ const HomeScreen = () => {
       setBodyMetrics(((prog?.bodyMetrics) || []).sort((a, b) => a.date.localeCompare(b.date)));
       setProfile(prof);
       setLoading(false);
+
+      // Pedometer
+      try {
+        const available = await Pedometer.isAvailableAsync();
+        if (!active) return;
+        setPedometerAvailable(available);
+        if (available) {
+          const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+          const now = new Date();
+          const total = await Pedometer.getStepCountAsync(midnight, now).catch(() => ({ steps: 0 }));
+          if (!active) return;
+          setStepsToday(total.steps || 0);
+          const currentHour = now.getHours();
+          const hourly = await Promise.all(
+            Array.from({ length: 24 }, (_, h) => {
+              if (h > currentHour) return Promise.resolve(0);
+              const s = new Date(midnight); s.setHours(h, 0, 0, 0);
+              const e = new Date(midnight); e.setHours(h + 1, 0, 0, 0);
+              return Pedometer.getStepCountAsync(s, e).then(r => r.steps || 0).catch(() => 0);
+            })
+          );
+          if (!active) return;
+          setHourlySteps(hourly);
+        } else {
+          setStepsToday(0);
+        }
+      } catch {
+        setPedometerAvailable(false);
+        setStepsToday(0);
+      }
     })();
     return () => { active = false; };
   }, []));
 
   const today = new Date();
   const monday = getMondayOf(today);
-  const prevMonday = new Date(monday); prevMonday.setDate(prevMonday.getDate() - 7);
   const todayStr = toDateStr(today);
 
   // Today's stats
@@ -347,16 +402,12 @@ const HomeScreen = () => {
   // Chart data
   const chartData = {
     calories: buildSessionChartData(history, s => s.caloriesBurned || 0),
-    workouts: buildSessionChartData(history, () => 1),
-    duration: buildSessionChartData(history, s => s.duration || 0),
     weight:   buildWeightChartData(bodyMetrics),
   };
   const currentData = chartData[selectedMetric]?.[timePeriod] || { labels: [], data: [] };
 
   // Period totals for the big number
   const periodCals   = sumPeriod(history, timePeriod, s => s.caloriesBurned || 0);
-  const periodWkts   = sumPeriod(history, timePeriod, () => 1);
-  const periodMins   = sumPeriod(history, timePeriod, s => s.duration || 0);
   const periodWeight = (() => {
     const filtered = bodyMetrics.filter(m => {
       if (!m.weight) return false;
@@ -367,40 +418,18 @@ const HomeScreen = () => {
 
   const bigNum = {
     calories: { value: periodCals.toLocaleString(), unit: 'kcal' },
-    workouts: { value: String(periodWkts), unit: 'sessions' },
-    duration: { value: periodMins.toLocaleString(), unit: 'min' },
     weight:   { value: periodWeight != null ? String(periodWeight) : '—', unit: 'kg' },
   }[selectedMetric];
 
   // Trend vs previous period
   const trend = (() => {
     if (selectedMetric === 'weight') return null;
-    const fn = {
-      calories: s => s.caloriesBurned || 0,
-      workouts: () => 1,
-      duration: s => s.duration || 0,
-    }[selectedMetric];
+    const fn = selectedMetric === 'calories' ? (s => s.caloriesBurned || 0) : null;
+    if (!fn) return null;
     return fmtPct(sumPeriod(history, timePeriod, fn), prevPeriodSum(history, timePeriod, fn));
   })();
   const trendUp = trend ? !trend.startsWith('-') && !trend.startsWith('−') : true;
 
-  // This week vs last week
-  const thisWeek = history.filter(s => {
-    const diff = Math.floor((new Date(s.completedAt) - monday) / 86400000);
-    return diff >= 0 && diff < 7;
-  });
-  const lastWeek = history.filter(s => {
-    const diff = Math.floor((new Date(s.completedAt) - prevMonday) / 86400000);
-    return diff >= 0 && diff < 7;
-  });
-  const thisWkCount = thisWeek.length;
-  const lastWkCount = lastWeek.length;
-  const thisWkMins  = thisWeek.reduce((s, x) => s + (x.duration || 0), 0);
-  const lastWkMins  = lastWeek.reduce((s, x) => s + (x.duration || 0), 0);
-  const thisWkCals  = thisWeek.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
-  const lastWkCals  = lastWeek.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
-  const thisWkVol   = thisWeek.reduce((s, x) => s + parseVolume(x.exercises), 0);
-  const lastWkVol   = lastWeek.reduce((s, x) => s + parseVolume(x.exercises), 0);
 
   // User display
   const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
@@ -464,6 +493,9 @@ const HomeScreen = () => {
         </View>
       </View>
 
+      {/* Heart rate card */}
+      <HeartRateCard />
+
       {/* Period selector */}
       <View style={styles.periodSelector}>
         {['Week','Month','Year','All'].map((p, i) => {
@@ -512,53 +544,84 @@ const HomeScreen = () => {
         ))}
       </ScrollView>
 
-      {/* This week stats */}
-      <View style={styles.weekSection}>
-        <Text style={styles.weekSectionTitle}>THIS WEEK</Text>
-        <View style={styles.weekGrid}>
-          {[
-            {
-              l: 'Workouts',
-              v: String(thisWkCount),
-              unit: '',
-              sub: fmtAbsDiff(thisWkCount, lastWkCount),
-              accent: thisWkCount >= lastWkCount ? Colors.text : Colors.softRed,
-            },
-            {
-              l: 'Total time',
-              v: String(thisWkMins),
-              unit: 'min',
-              sub: fmtAbsDiff(thisWkMins, lastWkMins, v => `${Math.round(v)} min`),
-              accent: thisWkMins >= lastWkMins ? Colors.indigo : Colors.softRed,
-            },
-            {
-              l: 'Calories',
-              v: thisWkCals.toLocaleString(),
-              unit: 'kcal',
-              sub: fmtAbsDiff(thisWkCals, lastWkCals, v => Math.round(v).toLocaleString()),
-              accent: thisWkCals >= lastWkCals ? Colors.amber : Colors.softRed,
-            },
-            {
-              l: 'Volume',
-              v: fmtVolume(thisWkVol),
-              unit: 'kg',
-              sub: (thisWkVol === 0 && lastWkVol === 0)
-                ? 'No strength data'
-                : fmtAbsDiff(thisWkVol, lastWkVol, v => fmtVolume(v)),
-              accent: thisWkVol >= lastWkVol ? Colors.green : Colors.softRed,
-            },
-          ].map(s => (
-            <View key={s.l} style={styles.weekStatCard}>
-              <Text style={styles.weekStatLabel}>{s.l}</Text>
-              <View style={styles.weekStatValueRow}>
-                <Text style={styles.weekStatValue}>{s.v}</Text>
-                {s.unit ? <Text style={styles.weekStatUnit}> {s.unit}</Text> : null}
-              </View>
-              <Text style={[styles.weekStatSub, { color: s.accent }]}>{s.sub}</Text>
+      {/* Steps card */}
+      <TouchableOpacity
+        style={styles.stepCard}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setStepsExpanded(p => !p);
+        }}
+        activeOpacity={0.85}
+      >
+        <View style={styles.stepCardTop}>
+          <View style={styles.stepCardLeft}>
+            <View style={styles.stepIconBg}>
+              <Ionicons name="footsteps-outline" size={18} color={Colors.amber} />
             </View>
-          ))}
+            <View>
+              <Text style={styles.stepCardLabel}>STEPS TODAY</Text>
+              <View style={styles.stepCardValueRow}>
+                <Text style={styles.stepCardValue}>
+                  {stepsToday !== null ? stepsToday.toLocaleString() : '—'}
+                </Text>
+                {stepsToday !== null && <Text style={styles.stepCardUnit}> steps</Text>}
+              </View>
+            </View>
+          </View>
+          <View style={styles.stepCardRight}>
+            {stepsToday !== null && (
+              <Text style={styles.stepGoalPct}>
+                {Math.min(Math.round((stepsToday / STEP_GOAL) * 100), 999)}% of {STEP_GOAL.toLocaleString()}
+              </Text>
+            )}
+            <Ionicons name={stepsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
+          </View>
         </View>
-      </View>
+        {stepsExpanded && (
+          stepsToday !== null && pedometerAvailable
+            ? <HourlyBarChart data={hourlySteps} />
+            : <Text style={styles.stepUnavail}>Motion data not available on this device</Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Distance card */}
+      <TouchableOpacity
+        style={styles.stepCard}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setDistanceExpanded(p => !p);
+        }}
+        activeOpacity={0.85}
+      >
+        <View style={styles.stepCardTop}>
+          <View style={styles.stepCardLeft}>
+            <View style={[styles.stepIconBg, { backgroundColor: 'rgba(99,102,241,0.15)' }]}>
+              <Ionicons name="map-outline" size={18} color={Colors.indigo} />
+            </View>
+            <View>
+              <Text style={styles.stepCardLabel}>DISTANCE TODAY</Text>
+              <View style={styles.stepCardValueRow}>
+                <Text style={styles.stepCardValue}>
+                  {stepsToday !== null ? fmtDistance(stepsToday) : '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.stepCardRight}>
+            {stepsToday !== null && (
+              <Text style={styles.stepGoalPct}>
+                {Math.min(Math.round((stepsToday * STEP_M / 1000 / DIST_GOAL_KM) * 100), 999)}% of {DIST_GOAL_KM} km
+              </Text>
+            )}
+            <Ionicons name={distanceExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
+          </View>
+        </View>
+        {distanceExpanded && (
+          stepsToday !== null && pedometerAvailable
+            ? <HourlyBarChart data={hourlySteps.map(s => Math.round(s * STEP_M))} />
+            : <Text style={styles.stepUnavail}>Motion data not available on this device</Text>
+        )}
+      </TouchableOpacity>
 
     </ScrollView>
   );
@@ -637,6 +700,30 @@ const styles = StyleSheet.create({
   chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
   chartLabelActive: { color: '#FFFFFF', fontWeight: '700' },
 
+  // Step cards
+  stepCard: {
+    marginHorizontal: 18, marginBottom: 12,
+    padding: 16, backgroundColor: Colors.cardBackground,
+    borderRadius: 18, borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  stepCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  stepCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center' },
+  stepCardLabel: { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.8, marginBottom: 2 },
+  stepCardValueRow: { flexDirection: 'row', alignItems: 'baseline' },
+  stepCardValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  stepCardUnit: { fontSize: 12, color: Colors.gray, fontWeight: '500' },
+  stepCardRight: { alignItems: 'flex-end', gap: 4 },
+  stepGoalPct: { fontSize: 11, color: Colors.gray, fontWeight: '600' },
+  stepUnavail: { fontSize: 12, color: Colors.gray, marginTop: 14, textAlign: 'center', paddingBottom: 4 },
+
+  // Hourly bar chart
+  hourlyChart: { marginTop: 16 },
+  hourlyBars: { flexDirection: 'row', alignItems: 'flex-end', height: 56, gap: 2 },
+  hourlyBar: { flex: 1, borderRadius: 3 },
+  hourlyLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  hourlyLabel: { fontSize: 9, color: Colors.gray, fontWeight: '500' },
+
   // Metric selector pills
   metricScroll: { marginBottom: 14 },
   metricScrollContent: { paddingHorizontal: 18, gap: 8 },
@@ -649,20 +736,6 @@ const styles = StyleSheet.create({
   metricPillText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
   metricPillTextActive: { color: '#FFFFFF' },
 
-  // This week stats
-  weekSection: { paddingHorizontal: 18 },
-  weekSectionTitle: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6, marginBottom: 10 },
-  weekGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  weekStatCard: {
-    width: '47.5%', backgroundColor: Colors.cardBackground,
-    padding: 14, borderRadius: 14,
-    borderWidth: 1, borderColor: Colors.borderColor,
-  },
-  weekStatLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
-  weekStatValueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
-  weekStatValue: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
-  weekStatUnit: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
-  weekStatSub: { fontSize: 10, fontWeight: '600', marginTop: 4 },
 });
 
 export default HomeScreen;

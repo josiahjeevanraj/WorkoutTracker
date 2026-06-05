@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.workouttracker.app",
+      "bundleIdentifier": "com.josiahjeevanraj.workouttracker",
       "buildNumber": "1"
     },
     "android": {

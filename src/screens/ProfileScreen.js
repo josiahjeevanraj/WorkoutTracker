@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { seedTestData, clearTestData } from '../utils/seedTestData';
 
 const ProfileScreen = () => {
   const { colors, currentTheme, changeTheme, availableThemes } = useTheme();
@@ -92,6 +93,35 @@ const ProfileScreen = () => {
         <Text style={[s.signOutText, { color: colors.gray }]}>Sign out</Text>
       </TouchableOpacity>
 
+      {/* Dev tools */}
+      <View style={[s.settingsGroup, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor, marginTop: 8 }]}>
+        <Text style={[s.devLabel, { color: colors.gray }]}>DEV TOOLS</Text>
+        <TouchableOpacity
+          style={[s.simpleRow, { borderBottomWidth: 1, borderBottomColor: colors.borderColor }]}
+          onPress={() =>
+            Alert.alert('Seed Test Data', 'This will add 6 weeks of sample workout and body metric data.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Seed', onPress: async () => { await seedTestData(); Alert.alert('Done', 'Test data seeded.'); } },
+            ])
+          }
+        >
+          <Text style={[s.simpleRowText, { color: '#FFFFFF' }]}>Seed Test Data</Text>
+          <Ionicons name="flask-outline" size={16} color={colors.gray} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.simpleRow}
+          onPress={() =>
+            Alert.alert('Clear Test Data', 'This will delete all workout history and body metric data.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Clear', style: 'destructive', onPress: async () => { await clearTestData(); Alert.alert('Done', 'Data cleared.'); } },
+            ])
+          }
+        >
+          <Text style={[s.simpleRowText, { color: '#FF6B6B' }]}>Clear Test Data</Text>
+          <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+        </TouchableOpacity>
+      </View>
+
       {/* Theme selector modal */}
       <Modal visible={showThemeModal} transparent animationType="slide" onRequestClose={() => setShowThemeModal(false)}>
         <View style={[s.modalOverlay, { backgroundColor: colors.modalBackground }]}>
@@ -177,6 +207,8 @@ const s = StyleSheet.create({
 
   simpleRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   simpleRowText: { flex: 1, fontSize: 14 },
+
+  devLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
 
   // Sign out
   signOutBtn: {

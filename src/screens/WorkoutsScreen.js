@@ -238,8 +238,15 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpda
       overshootRight={false}
       friction={2}
     >
-      <View style={styles.inlineSetRow}>
-        <Text style={styles.inlineSetLabel}>Set {si + 1}</Text>
+      <View style={[styles.inlineSetRow, set.warmup && styles.warmupRow]}>
+        <TouchableOpacity
+          style={[styles.warmupToggle, set.warmup && styles.warmupToggleActive]}
+          onPress={() => onUpdate(exKey, si, 'warmup', !set.warmup, context)}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Text style={[styles.warmupToggleText, set.warmup && styles.warmupToggleTextActive]}>W</Text>
+        </TouchableOpacity>
+        <Text style={[styles.inlineSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
         <View style={styles.weightInputGroup}>
           <TextInput
             style={[styles.inlineSetInput, { flex: 1 }]}
@@ -260,7 +267,7 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, context, canDelete, onUpda
         </View>
         <Text style={styles.inlineSetX}>×</Text>
         <TextInput
-          style={styles.inlineSetInput}
+          style={styles.repsInput}
           value={String(set.reps || '')}
           onChangeText={v => onUpdate(exKey, si, 'reps', v, context)}
           placeholder="reps"
@@ -344,7 +351,7 @@ const WorkoutsScreen = () => {
   const [logNotes, setLogNotes] = useState('');
   const [editMode, setEditMode] = useState(false);
   const [editedSession, setEditedSession] = useState(null);
-  const [activeView, setActiveView] = useState('list');
+  const [activeView, setActiveView] = useState('calendar');
   const [inlinePickerKey, setInlinePickerKey] = useState(null);
   const [inlinePickerSearch, setInlinePickerSearch] = useState('');
   const [expandedNotes, setExpandedNotes] = useState('');
@@ -423,7 +430,13 @@ const WorkoutsScreen = () => {
   const cancelEdit = () => { setEditMode(false); setEditedSession(null); setSelectedSession(null); };
 
   const handleSaveEdit = async () => {
-    const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ex);
+    const namedExercises = (editedSession.exercises || []).filter(ex => ex.name?.trim());
+    const hasEmptyReps = namedExercises.some(ex => ex.sets.some(s => !String(s.reps).trim()));
+    if (hasEmptyReps) { Alert.alert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
+    const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ({
+      ...ex,
+      sets: ex.sets.map(s => ({ ...s, weight: String(s.weight).trim() || '0' })),
+    }));
     const updates = { name: editedSession.name?.trim() || selectedSession.name, exercises: cleanExercises, exerciseCount: cleanExercises.length, notes: editedSession.notes ?? '' };
     const updated = await StorageService.updateWorkoutSession(editedSession.id, updates);
     if (updated) {
@@ -463,7 +476,7 @@ const WorkoutsScreen = () => {
   const removeExercise = (key) =>
     setEditedSession(prev => ({ ...prev, exercises: prev.exercises.filter(ex => ex._key !== key) }));
   const addExercise = () =>
-    setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: [{ reps: '', weight: '' }], _key: Date.now().toString() }] }));
+    setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: [{ reps: '', weight: '', warmup: false }], _key: Date.now().toString() }] }));
 
   // ── Inline set helpers (used in both log and edit flows) ──────────────────
   const updateSet = (exKey, setIdx, field, value, context) => {
@@ -480,7 +493,7 @@ const WorkoutsScreen = () => {
   const addSet = (exKey, context) => {
     const updater = exercises => exercises.map(ex =>
       ex._key === exKey
-        ? { ...ex, sets: [...ex.sets, { weight: ex.sets[ex.sets.length - 1]?.weight || '', reps: '' }] }
+        ? { ...ex, sets: [...ex.sets, { weight: ex.sets[ex.sets.length - 1]?.weight || '', reps: '', warmup: false }] }
         : ex
     );
     context === 'log'
@@ -510,13 +523,20 @@ const WorkoutsScreen = () => {
 
   const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); setLogTargetDate(null); };
   const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
-  const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '' }], _key: Date.now().toString() }]);
+  const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '', warmup: false }], _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeLogExercise = (key) => setLogExercises(prev => prev.filter(ex => ex._key !== key));
 
   const handleLogWorkout = async () => {
     if (!selectedWorkout) { Alert.alert('Select a workout', 'Please choose a category and workout first'); return; }
-    const cleanExercises = logExercises.filter(ex => ex.name.trim()).map(({ _key, ...ex }) => ex);
+    const namedExercises = logExercises.filter(ex => ex.name.trim());
+    if (!namedExercises.length) { Alert.alert('No exercises', 'Please add at least one exercise before saving.'); return; }
+    const hasEmptyReps = namedExercises.some(ex => ex.sets.some(s => !String(s.reps).trim()));
+    if (hasEmptyReps) { Alert.alert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
+    const cleanExercises = namedExercises.map(({ _key, ...ex }) => ({
+      ...ex,
+      sets: ex.sets.map(s => ({ ...s, weight: String(s.weight).trim() || '0' })),
+    }));
     const completedAt = logTargetDate
       ? new Date(logTargetDate + 'T12:00:00').toISOString()
       : new Date().toISOString();
@@ -583,18 +603,18 @@ const WorkoutsScreen = () => {
         <Text style={styles.headerTitle}>Workouts</Text>
         <View style={styles.viewToggle}>
           <TouchableOpacity
-            style={[styles.toggleBtn, activeView === 'list' && styles.toggleBtnActive]}
-            onPress={() => setActiveView('list')}
-          >
-            <Ionicons name="list-outline" size={15} color={activeView === 'list' ? '#FFFFFF' : Colors.gray} />
-            <Text style={[styles.toggleBtnText, activeView === 'list' && styles.toggleBtnTextActive]}>List</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
             style={[styles.toggleBtn, activeView === 'calendar' && styles.toggleBtnActive]}
             onPress={() => setActiveView('calendar')}
           >
             <Ionicons name="calendar-outline" size={15} color={activeView === 'calendar' ? '#FFFFFF' : Colors.gray} />
             <Text style={[styles.toggleBtnText, activeView === 'calendar' && styles.toggleBtnTextActive]}>Calendar</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleBtn, activeView === 'list' && styles.toggleBtnActive]}
+            onPress={() => setActiveView('list')}
+          >
+            <Ionicons name="list-outline" size={15} color={activeView === 'list' ? '#FFFFFF' : Colors.gray} />
+            <Text style={[styles.toggleBtnText, activeView === 'list' && styles.toggleBtnTextActive]}>List</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -607,6 +627,7 @@ const WorkoutsScreen = () => {
             renderItem={renderItem}
             renderSectionHeader={renderSectionHeader}
             contentContainerStyle={styles.listContent}
+            keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Ionicons name="barbell-outline" size={48} color={Colors.gray} />
@@ -674,7 +695,6 @@ const WorkoutsScreen = () => {
                             onChangeText={setInlinePickerSearch}
                             placeholder="Search exercises..."
                             placeholderTextColor={Colors.gray}
-                            autoFocus
                           />
                           {inlinePickerSearch.length > 0 && (
                             <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
@@ -772,8 +792,15 @@ const WorkoutsScreen = () => {
                         )}
                       </View>
                       {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
-                        <View key={si} style={styles.expandSetRow}>
-                          <Text style={styles.expandSetLabel}>Set {si + 1}</Text>
+                        <View key={si} style={[styles.expandSetRow, set.warmup && styles.expandWarmupRow]}>
+                          <View style={styles.expandSetLabelRow}>
+                            {set.warmup && (
+                              <View style={styles.warmupTag}>
+                                <Text style={styles.warmupTagText}>W</Text>
+                              </View>
+                            )}
+                            <Text style={[styles.expandSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
+                          </View>
                           <Text style={styles.expandSetMeta}>
                             {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
                           </Text>
@@ -872,7 +899,6 @@ const WorkoutsScreen = () => {
                               onChangeText={setInlinePickerSearch}
                               placeholder="Search exercises..."
                               placeholderTextColor={Colors.gray}
-                              autoFocus
                             />
                             {inlinePickerSearch.length > 0 && (
                               <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
@@ -1029,9 +1055,13 @@ const styles = StyleSheet.create({
   expandExHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   expandExName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', flex: 1 },
   expandExSetCount: { fontSize: 12, color: Colors.gray },
-  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, paddingHorizontal: 4 },
-  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600', width: 50 },
+  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6 },
+  expandWarmupRow: { backgroundColor: 'rgba(251,191,36,0.06)' },
+  expandSetLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600' },
   expandSetMeta: { fontSize: 13, color: Colors.text, fontWeight: '500' },
+  warmupTag: { backgroundColor: Colors.amber, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  warmupTagText: { fontSize: 9, fontWeight: '800', color: Colors.background, letterSpacing: 0.3 },
   expandNotesBlock: { marginTop: 20, padding: 14, backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandNotesLabel: { fontSize: 11, color: Colors.gray, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
@@ -1103,9 +1133,15 @@ const styles = StyleSheet.create({
   inlineSetsContainer: { marginTop: 8 },
   swipeHint: { fontSize: 10, color: Colors.gray, textAlign: 'center', marginBottom: 6, letterSpacing: 0.4 },
   inlineSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, backgroundColor: Colors.background, paddingVertical: 6, paddingHorizontal: 4, borderRadius: 8 },
+  warmupRow: { backgroundColor: 'rgba(251,191,36,0.06)', borderWidth: 1, borderColor: 'rgba(251,191,36,0.2)' },
+  warmupToggle: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: Colors.borderColor, alignItems: 'center', justifyContent: 'center' },
+  warmupToggleActive: { backgroundColor: Colors.amber, borderColor: Colors.amber },
+  warmupToggleText: { fontSize: 10, fontWeight: '800', color: Colors.gray },
+  warmupToggleTextActive: { color: Colors.background },
   inlineSetLabel: { fontSize: 12, color: Colors.gray, fontWeight: '600', width: 44 },
   weightInputGroup: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  inlineSetInput: { flex: 1, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, fontSize: 14, color: '#FFFFFF', backgroundColor: Colors.background, textAlign: 'center' },
+  inlineSetInput: { borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, fontSize: 14, color: '#FFFFFF', backgroundColor: Colors.background, textAlign: 'center' },
+  repsInput: { width: 64, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, fontSize: 14, color: '#FFFFFF', backgroundColor: Colors.background, textAlign: 'center' },
   unitToggle: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 7, paddingVertical: 8, backgroundColor: Colors.cardBackground, borderRadius: 8, borderWidth: 1, borderColor: Colors.borderColor },
   unitToggleText: { fontSize: 11, color: Colors.text, fontWeight: '700' },
   inlineSetX: { fontSize: 16, color: Colors.gray, fontWeight: '600' },

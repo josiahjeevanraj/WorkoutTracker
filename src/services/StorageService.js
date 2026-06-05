@@ -121,6 +121,16 @@ class StorageService {
     }
   }
 
+  async saveWorkoutHistory(history) {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
+      return true;
+    } catch (error) {
+      console.error('Error saving workout history:', error);
+      return false;
+    }
+  }
+
   async isWorkoutHistoryUnset() {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
