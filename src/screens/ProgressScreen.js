@@ -280,7 +280,7 @@ const ProgressScreen = () => {
   const [goals, setGoals] = useState({ targetWeight: '', targetBodyFat: '' });
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [goalsModalVisible, setGoalsModalVisible] = useState(false);
-  const [statsEdit, setStatsEdit] = useState({ height: '', bodyFat: '' });
+  const [statsEdit, setStatsEdit] = useState({ height: '', bodyFat: '', weight: '' });
   const [goalsEdit, setGoalsEdit] = useState({ targetWeight: '', targetBodyFat: '' });
   const [customStartDate, setCustomStartDate] = useState(null);
   const [customEndDate, setCustomEndDate] = useState(null);
@@ -314,6 +314,20 @@ const ProgressScreen = () => {
       bodyFat: parseFloat(statsEdit.bodyFat) || null,
     });
     setUserStats({ height: statsEdit.height, bodyFat: statsEdit.bodyFat });
+
+    const todayKey = toKey(new Date());
+    const weight = parseFloat(statsEdit.weight) || null;
+    const updatedBodyData = {
+      ...bodyData,
+      [todayKey]: {
+        caloriesConsumed: 0, caloriesBurned: 0, workouts: [],
+        ...bodyData[todayKey],
+        weight,
+      },
+    };
+    setBodyData(updatedBodyData);
+    await StorageService.saveFitnessData(updatedBodyData);
+
     setStatsModalVisible(false);
   };
 
@@ -806,7 +820,11 @@ const ProgressScreen = () => {
           <View style={styles.statsCard}>
             <View style={styles.statsCardHeader}>
               <Text style={styles.statsCardTitle}>CURRENT STATS</Text>
-              <TouchableOpacity onPress={() => { setStatsEdit({ ...userStats }); setStatsModalVisible(true); }}>
+              <TouchableOpacity onPress={() => {
+                const todayWeight = bodyData[toKey(new Date())]?.weight;
+                setStatsEdit({ ...userStats, weight: todayWeight ? todayWeight.toString() : '' });
+                setStatsModalVisible(true);
+              }}>
                 <Ionicons name="pencil-outline" size={16} color={Colors.gray} />
               </TouchableOpacity>
             </View>
@@ -1138,6 +1156,7 @@ const ProgressScreen = () => {
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Current Stats</Text>
             {[
+              { label: 'Weight (kg)', key: 'weight', placeholder: 'e.g. 75' },
               { label: 'Height (cm)', key: 'height', placeholder: 'e.g. 175' },
               { label: 'Body Fat (%)', key: 'bodyFat', placeholder: 'e.g. 18' },
             ].map(f => (
