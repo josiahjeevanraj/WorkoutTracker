@@ -267,15 +267,20 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   };
 
   const deleteData = () => {
+    const confirmDelete = () => {
+      const newData = { ...fitnessData };
+      delete newData[selectedDate];
+      setFitnessData(newData);
+      StorageService.saveFitnessData(newData).catch(console.error);
+      setIsEditing(false);
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete Data\n\nDelete all data for ${selectedDate}?`)) confirmDelete();
+      return;
+    }
     Alert.alert('Delete Data', `Delete all data for ${selectedDate}?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => {
-        const newData = { ...fitnessData };
-        delete newData[selectedDate];
-        setFitnessData(newData);
-        StorageService.saveFitnessData(newData).catch(console.error);
-        setIsEditing(false);
-      }},
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
     ]);
   };
 
@@ -359,15 +364,20 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   };
 
   const handleDeleteFromExpansion = () => {
+    const confirmDelete = async () => {
+      const id = expandedCard?.session?.id;
+      if (!id) return;
+      closeExpansion();
+      await StorageService.deleteWorkoutSession(id);
+      onSessionDeleted?.();
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete Workout\n\nThis cannot be undone.')) confirmDelete();
+      return;
+    }
     Alert.alert('Delete Workout', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        const id = expandedCard?.session?.id;
-        if (!id) return;
-        closeExpansion();
-        await StorageService.deleteWorkoutSession(id);
-        onSessionDeleted?.();
-      }},
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
     ]);
   };
 

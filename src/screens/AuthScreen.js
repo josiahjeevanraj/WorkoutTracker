@@ -24,7 +24,7 @@ const AuthScreen = () => {
       return;
     }
     setLoading(true);
-    const { error } = isSignUp
+    const { data, error } = isSignUp
       ? await supabase.auth.signUp({ email, password })
       : await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -32,7 +32,10 @@ const AuthScreen = () => {
       setError(error.message);
       return;
     }
-    if (isSignUp) setCheckEmail(true);
+    // If email confirmation is required, signUp returns no session yet.
+    // If confirmation is disabled, a session comes back immediately and
+    // the app's auth listener will take over — no need to show this screen.
+    if (isSignUp && !data?.session) setCheckEmail(true);
   };
 
   if (checkEmail) {

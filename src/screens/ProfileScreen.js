@@ -1,29 +1,53 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { seedTestData, clearTestData } from '../utils/seedTestData';
+import { useFocusEffect } from '@react-navigation/native';
+import StorageService from '../services/StorageService';
+
+const fmtDate = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 const ProfileScreen = () => {
   const { colors, currentTheme, changeTheme, availableThemes } = useTheme();
   const { user, signOut } = useAuth();
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showPRModal, setShowPRModal] = useState(false);
+  const [history, setHistory] = useState([]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      StorageService.getWorkoutHistory().then(setHistory);
+    }, [])
+  );
+
+  // Best-ever set per exercise (same "max weight across all sets" definition as ProgressScreen's PB)
+  const prList = useMemo(() => {
+    const best = {};
+    history.forEach(session => {
+      session.exercises?.forEach(ex => {
+        ex.sets?.forEach(set => {
+          const weight = parseFloat(set.weight) || 0;
+          if (weight <= 0) return;
+          if (!best[ex.name] || weight > best[ex.name].weight) {
+            best[ex.name] = { name: ex.name, weight, reps: set.reps, unit: set.unit || 'kg', completedAt: session.completedAt };
+          }
+        });
+      });
+    });
+    return Object.values(best).sort((a, b) => a.name.localeCompare(b.name));
+  }, [history]);
 
   const email = user?.email || '';
   const initials = email.slice(0, 2).toUpperCase();
 
   const primarySettings = [
     { icon: 'person-outline',  color: '#58D8DB', title: 'Edit Profile',    sub: 'Name, email, avatar',  onPress: null },
-    { icon: 'fitness-outline', color: '#6366F1', title: 'Goals & Targets', sub: '5 workouts/week',       onPress: null },
-    { icon: 'leaf-outline',    color: '#34D399', title: 'Notifications',   sub: 'Daily reminders on',   onPress: null },
     { icon: 'body-outline',    color: '#FBBF24', title: 'Units',           sub: 'Metric (kg, km)',       onPress: null },
     { icon: 'color-palette-outline', color: '#58D8DB', title: 'Theme',
       sub: availableThemes.find(t => t.id === currentTheme)?.name || 'Ocean Blue',
       onPress: () => setShowThemeModal(true) },
   ];
-
-  const secondaryLinks = ['Privacy', 'Terms of Service', 'Help & Support'];
 
   return (
     <ScrollView style={[s.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -44,18 +68,13 @@ const ProfileScreen = () => {
           </View>
         </View>
         <View style={[s.heroDivider, { borderColor: 'rgba(88,216,219,0.15)' }]} />
-        <View style={s.heroStats}>
-          {[
-            { l: 'Workouts', v: '234' },
-            { l: 'Streak',   v: '12' },
-            { l: 'PRs',      v: '18' },
-          ].map(stat => (
-            <View key={stat.l} style={s.heroStatItem}>
-              <Text style={s.heroStatValue}>{stat.v}</Text>
-              <Text style={[s.heroStatLabel, { color: colors.gray }]}>{stat.l.toUpperCase()}</Text>
-            </View>
-          ))}
-        </View>
+        <TouchableOpacity style={s.heroStats} onPress={() => setShowPRModal(true)} activeOpacity={0.7}>
+          <View style={s.heroStatItem}>
+            <Text style={s.heroStatValue}>{prList.length}</Text>
+            <Text style={[s.heroStatLabel, { color: colors.gray }]}>PRS</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.gray} />
+        </TouchableOpacity>
       </View>
 
       {/* Primary settings */}
@@ -79,52 +98,10 @@ const ProfileScreen = () => {
         ))}
       </View>
 
-      {/* Secondary links */}
-      <View style={[s.settingsGroup, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
-        {secondaryLinks.map((title, idx) => (
-          <TouchableOpacity
-            key={title}
-            style={[s.simpleRow, idx < secondaryLinks.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.borderColor }]}
-          >
-            <Text style={[s.simpleRowText, { color: '#FFFFFF' }]}>{title}</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.gray} />
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* Sign out — ghost style */}
       <TouchableOpacity style={[s.signOutBtn, { borderColor: colors.borderColor }]} onPress={signOut}>
         <Text style={[s.signOutText, { color: colors.gray }]}>Sign out</Text>
       </TouchableOpacity>
-
-      {/* Dev tools */}
-      <View style={[s.settingsGroup, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor, marginTop: 8 }]}>
-        <Text style={[s.devLabel, { color: colors.gray }]}>DEV TOOLS</Text>
-        <TouchableOpacity
-          style={[s.simpleRow, { borderBottomWidth: 1, borderBottomColor: colors.borderColor }]}
-          onPress={() =>
-            Alert.alert('Seed Test Data', 'This will add 6 weeks of sample workout and body metric data.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Seed', onPress: async () => { await seedTestData(); Alert.alert('Done', 'Test data seeded.'); } },
-            ])
-          }
-        >
-          <Text style={[s.simpleRowText, { color: '#FFFFFF' }]}>Seed Test Data</Text>
-          <Ionicons name="flask-outline" size={16} color={colors.gray} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.simpleRow}
-          onPress={() =>
-            Alert.alert('Clear Test Data', 'This will delete all workout history and body metric data.', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Clear', style: 'destructive', onPress: async () => { await clearTestData(); Alert.alert('Done', 'Data cleared.'); } },
-            ])
-          }
-        >
-          <Text style={[s.simpleRowText, { color: '#FF6B6B' }]}>Clear Test Data</Text>
-          <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
-        </TouchableOpacity>
-      </View>
 
       {/* Theme selector modal */}
       <Modal visible={showThemeModal} transparent animationType="slide" onRequestClose={() => setShowThemeModal(false)}>
@@ -163,6 +140,35 @@ const ProfileScreen = () => {
         </View>
       </Modal>
 
+      {/* Personal Records modal */}
+      <Modal visible={showPRModal} transparent animationType="slide" onRequestClose={() => setShowPRModal(false)}>
+        <View style={[s.modalOverlay, { backgroundColor: colors.modalBackground }]}>
+          <View style={[s.modalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: '#FFFFFF' }]}>Personal Records</Text>
+              <TouchableOpacity onPress={() => setShowPRModal(false)}>
+                <Ionicons name="close-circle" size={28} color={colors.gray} />
+              </TouchableOpacity>
+            </View>
+            {prList.length === 0 ? (
+              <Text style={[s.prEmptyText, { color: colors.gray }]}>No personal records yet — log a workout to get started.</Text>
+            ) : (
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {prList.map((pr, idx) => (
+                  <View key={pr.name} style={[s.prRow, idx < prList.length - 1 && { borderBottomWidth: 1, borderColor: colors.borderColor }]}>
+                    <View style={s.prInfo}>
+                      <Text style={[s.prName, { color: '#FFFFFF' }]}>{pr.name}</Text>
+                      <Text style={[s.prDate, { color: colors.gray }]}>{fmtDate(pr.completedAt)}</Text>
+                    </View>
+                    <Text style={[s.prValue, { color: colors.text }]}>{pr.weight} {pr.unit} × {pr.reps}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 };
@@ -192,10 +198,10 @@ const s = StyleSheet.create({
   heroInfo: { flex: 1 },
   heroName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   heroDivider: { borderTopWidth: 1, marginVertical: 14 },
-  heroStats: { flexDirection: 'row', justifyContent: 'space-around' },
-  heroStatItem: { alignItems: 'center' },
+  heroStats: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroStatItem: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   heroStatValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
-  heroStatLabel: { fontSize: 10, letterSpacing: 0.6, marginTop: 2 },
+  heroStatLabel: { fontSize: 10, letterSpacing: 0.6 },
 
   // Settings groups
   settingsGroup: {
@@ -207,11 +213,6 @@ const s = StyleSheet.create({
   settingText: { flex: 1 },
   settingTitle: { fontSize: 14, fontWeight: '600' },
   settingSub: { fontSize: 11, marginTop: 1 },
-
-  simpleRow: { flexDirection: 'row', alignItems: 'center', padding: 14 },
-  simpleRowText: { flex: 1, fontSize: 14 },
-
-  devLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 4 },
 
   // Sign out
   signOutBtn: {
@@ -233,6 +234,17 @@ const s = StyleSheet.create({
   themeName: { fontSize: 18, fontWeight: '500' },
   colorDots: { flexDirection: 'row', gap: 8 },
   colorDot: { width: 24, height: 24, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+
+  // Personal Records modal
+  prEmptyText: { fontSize: 14, textAlign: 'center', paddingVertical: 24 },
+  prRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 14,
+  },
+  prInfo: { flex: 1 },
+  prName: { fontSize: 15, fontWeight: '600' },
+  prDate: { fontSize: 12, marginTop: 2 },
+  prValue: { fontSize: 15, fontWeight: '700' },
 });
 
 export default ProfileScreen;

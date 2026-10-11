@@ -333,15 +333,20 @@ const WorkoutsScreen = () => {
   };
 
   const handleDeleteFromExpansion = () => {
+    const confirmDelete = async () => {
+      const id = expandedCard?.session?.id;
+      if (!id) return;
+      closeExpansion();
+      await StorageService.deleteWorkoutSession(id);
+      setHistory(prev => prev.filter(s => s.id !== id));
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete Workout\n\nThis cannot be undone.')) confirmDelete();
+      return;
+    }
     Alert.alert('Delete Workout', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        const id = expandedCard?.session?.id;
-        if (!id) return;
-        closeExpansion();
-        await StorageService.deleteWorkoutSession(id);
-        setHistory(prev => prev.filter(s => s.id !== id));
-      }},
+      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
     ]);
   };
 
