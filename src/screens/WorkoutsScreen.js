@@ -13,119 +13,6 @@ import { Colors } from '../constants/colors';
 import CalendarScreen from './CalendarScreen';
 import { EXERCISE_LIST } from '../constants/exercises';
 
-const daysAgo = (days, hour = 10, minute = 0) => {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  d.setHours(hour, minute, 0, 0);
-  return d.toISOString();
-};
-
-const mkSets = (count, reps, weight) =>
-  Array.from({ length: count }, () => ({ reps: String(reps), weight: String(weight) }));
-
-const DEFAULT_SESSIONS = [
-  {
-    name: 'Leg Day',
-    duration: 52,
-    exerciseCount: 7,
-    caloriesBurned: 380,
-    exercises: [
-      { name: 'Barbell Squats',    sets: mkSets(4, 8,  100) },
-      { name: 'Romanian Deadlift', sets: mkSets(3, 10, 80)  },
-      { name: 'Leg Press',         sets: mkSets(3, 12, 120) },
-      { name: 'Leg Curls',         sets: mkSets(3, 12, 40)  },
-      { name: 'Calf Raises',       sets: mkSets(4, 15, 60)  },
-      { name: 'Walking Lunges',    sets: mkSets(3, 20, '')   },
-      { name: 'Leg Extensions',    sets: mkSets(3, 15, 35)  },
-    ],
-    notes: 'New PR on squats! Felt strong.',
-    completedAt: daysAgo(0, 9, 30),
-  },
-  {
-    name: 'HIIT Cardio',
-    duration: 25,
-    exerciseCount: 8,
-    caloriesBurned: 310,
-    exercises: [
-      { name: 'Jump Rope',         sets: mkSets(5, '60s', '') },
-      { name: 'Burpees',           sets: mkSets(4, 15,   '') },
-      { name: 'Mountain Climbers', sets: mkSets(4, '30s', '') },
-      { name: 'Box Jumps',         sets: mkSets(3, 10,   '') },
-      { name: 'High Knees',        sets: mkSets(4, '30s', '') },
-      { name: 'Sprints',           sets: mkSets(6, '20s', '') },
-      { name: 'Jump Squats',       sets: mkSets(3, 12,   '') },
-      { name: 'Plank Hold',        sets: mkSets(3, '45s', '') },
-    ],
-    notes: 'Intense session. Kept rest periods short.',
-    completedAt: daysAgo(1, 7, 0),
-  },
-  {
-    name: 'Upper Body Push',
-    duration: 45,
-    exerciseCount: 6,
-    caloriesBurned: 290,
-    exercises: [
-      { name: 'Bench Press',    sets: mkSets(4, 6,  90) },
-      { name: 'Overhead Press', sets: mkSets(3, 8,  60) },
-      { name: 'Incline DB Press', sets: mkSets(3, 10, 32) },
-      { name: 'Lateral Raises', sets: mkSets(4, 15, 12) },
-      { name: 'Tricep Dips',    sets: mkSets(3, 12, '') },
-      { name: 'Cable Flyes',    sets: mkSets(3, 15, 15) },
-    ],
-    notes: '',
-    completedAt: daysAgo(2, 18, 30),
-  },
-  {
-    name: 'Core & Abs',
-    duration: 30,
-    exerciseCount: 5,
-    caloriesBurned: 180,
-    exercises: [
-      { name: 'Plank',              sets: mkSets(3, '60s', '') },
-      { name: 'Hanging Leg Raises', sets: mkSets(3, 12,    '') },
-      { name: 'Cable Crunches',     sets: mkSets(3, 20,    25) },
-      { name: 'Russian Twists',     sets: mkSets(3, 30,    10) },
-      { name: 'Ab Wheel',           sets: mkSets(3, 10,    '') },
-    ],
-    notes: 'Added ab wheel for the first time.',
-    completedAt: daysAgo(2, 10, 0),
-  },
-  {
-    name: 'Upper Body Pull',
-    duration: 42,
-    exerciseCount: 6,
-    caloriesBurned: 260,
-    exercises: [
-      { name: 'Pull-ups',         sets: mkSets(4, 8,  '') },
-      { name: 'Barbell Rows',     sets: mkSets(4, 8,  80) },
-      { name: 'Seated Cable Row', sets: mkSets(3, 12, 60) },
-      { name: 'Face Pulls',       sets: mkSets(3, 15, 20) },
-      { name: 'Barbell Curls',    sets: mkSets(3, 10, 40) },
-      { name: 'Hammer Curls',     sets: mkSets(3, 12, 16) },
-    ],
-    notes: '',
-    completedAt: daysAgo(4, 9, 0),
-  },
-  {
-    name: 'Full Body Workout',
-    duration: 55,
-    exerciseCount: 8,
-    caloriesBurned: 420,
-    exercises: [
-      { name: 'Deadlift',       sets: mkSets(4, 5,  130) },
-      { name: 'Bench Press',    sets: mkSets(3, 8,  85)  },
-      { name: 'Squats',         sets: mkSets(3, 8,  90)  },
-      { name: 'Pull-ups',       sets: mkSets(3, 8,  '')  },
-      { name: 'Dips',           sets: mkSets(3, 10, '')  },
-      { name: 'Barbell Rows',   sets: mkSets(3, 10, 70)  },
-      { name: 'Overhead Press', sets: mkSets(3, 10, 55)  },
-      { name: 'Farmer Walks',   sets: mkSets(3, '40m', 40) },
-    ],
-    notes: 'Deadlift felt great. Kept rest to 2 min.',
-    completedAt: daysAgo(6, 11, 0),
-  },
-];
-
 // Categories match the "category" column in strength_exercises.csv
 const WORKOUT_CATEGORIES = [
   {
@@ -361,23 +248,10 @@ const WorkoutsScreen = () => {
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
 
-  useEffect(() => { loadHistory(true).catch(console.error); }, []);
+  useEffect(() => { loadHistory().catch(console.error); }, []);
 
-  const loadHistory = async (seed = false) => {
-    const [saved, isUnset] = await Promise.all([
-      StorageService.getWorkoutHistory(),
-      seed ? StorageService.isWorkoutHistoryUnset() : Promise.resolve(false),
-    ]);
-    const needsMigration = seed && !isUnset && saved.some(s =>
-      s.exercises?.some(ex => !Array.isArray(ex.sets))
-    );
-    if (seed && (isUnset || needsMigration)) {
-      await StorageService.clearAllData();
-      for (const session of DEFAULT_SESSIONS) await StorageService.addWorkoutSession(session);
-      setHistory(await StorageService.getWorkoutHistory());
-    } else {
-      setHistory(saved);
-    }
+  const loadHistory = async () => {
+    setHistory(await StorageService.getWorkoutHistory());
   };
 
   const toggleDay = (key) => {
