@@ -2,11 +2,16 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { seedTestData, clearTestData } from '../utils/seedTestData';
 
 const ProfileScreen = () => {
   const { colors, currentTheme, changeTheme, availableThemes } = useTheme();
+  const { user, signOut } = useAuth();
   const [showThemeModal, setShowThemeModal] = useState(false);
+
+  const email = user?.email || '';
+  const initials = email.slice(0, 2).toUpperCase();
 
   const primarySettings = [
     { icon: 'person-outline',  color: '#58D8DB', title: 'Edit Profile',    sub: 'Name, email, avatar',  onPress: null },
@@ -32,11 +37,10 @@ const ProfileScreen = () => {
       <View style={[s.heroCard, { borderColor: 'rgba(88,216,219,0.2)' }]}>
         <View style={s.heroTop}>
           <View style={s.heroAvatar}>
-            <Text style={s.heroAvatarText}>JD</Text>
+            <Text style={s.heroAvatarText}>{initials}</Text>
           </View>
           <View style={s.heroInfo}>
-            <Text style={s.heroName}>John Doe</Text>
-            <Text style={[s.heroSince, { color: colors.gray }]}>Member since Jan 2024</Text>
+            <Text style={s.heroName}>{email}</Text>
           </View>
         </View>
         <View style={[s.heroDivider, { borderColor: 'rgba(88,216,219,0.15)' }]} />
@@ -89,7 +93,7 @@ const ProfileScreen = () => {
       </View>
 
       {/* Sign out — ghost style */}
-      <TouchableOpacity style={[s.signOutBtn, { borderColor: colors.borderColor }]}>
+      <TouchableOpacity style={[s.signOutBtn, { borderColor: colors.borderColor }]} onPress={signOut}>
         <Text style={[s.signOutText, { color: colors.gray }]}>Sign out</Text>
       </TouchableOpacity>
 
@@ -187,7 +191,6 @@ const s = StyleSheet.create({
   heroAvatarText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
   heroInfo: { flex: 1 },
   heroName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  heroSince: { fontSize: 12, marginTop: 2 },
   heroDivider: { borderTopWidth: 1, marginVertical: 14 },
   heroStats: { flexDirection: 'row', justifyContent: 'space-around' },
   heroStatItem: { alignItems: 'center' },

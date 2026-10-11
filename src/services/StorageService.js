@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabaseClient';
 
 const STORAGE_KEYS = {
   WORKOUTS: '@workouts',
@@ -8,25 +8,53 @@ const STORAGE_KEYS = {
   FITNESS_DATA: '@fitness_data',
 };
 
+let currentUserId = null;
+
+export function setCurrentUserId(id) {
+  currentUserId = id;
+}
+
 class StorageService {
-  async saveWorkouts(workouts) {
+  async _get(key, fallback) {
+    if (!currentUserId) return fallback;
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUTS, JSON.stringify(workouts));
+      const { data, error } = await supabase
+        .from('app_data')
+        .select('data')
+        .eq('user_id', currentUserId)
+        .eq('key', key)
+        .maybeSingle();
+      if (error) throw error;
+      return data ? data.data : fallback;
+    } catch (error) {
+      console.error(`Error loading ${key}:`, error);
+      return fallback;
+    }
+  }
+
+  async _set(key, value) {
+    if (!currentUserId) return false;
+    try {
+      const { error } = await supabase
+        .from('app_data')
+        .upsert(
+          { user_id: currentUserId, key, data: value, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,key' }
+        );
+      if (error) throw error;
       return true;
     } catch (error) {
-      console.error('Error saving workouts:', error);
+      console.error(`Error saving ${key}:`, error);
       return false;
     }
   }
 
+  async saveWorkouts(workouts) {
+    return this._set(STORAGE_KEYS.WORKOUTS, workouts);
+  }
+
   async getWorkouts() {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUTS);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error loading workouts:', error);
-      return [];
-    }
+    return this._get(STORAGE_KEYS.WORKOUTS, []);
   }
 
   async addWorkout(workout) {
@@ -75,23 +103,11 @@ class StorageService {
   }
 
   async saveUserProfile(profile) {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
-      return true;
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      return false;
-    }
+    return this._set(STORAGE_KEYS.USER_PROFILE, profile);
   }
 
   async getUserProfile() {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-      return data ? JSON.parse(data) : null;
-    } catch (error) {
-      console.error('Error loading profile:', error);
-      return null;
-    }
+    return this._get(STORAGE_KEYS.USER_PROFILE, null);
   }
 
   async addWorkoutSession(session) {
@@ -103,7 +119,7 @@ class StorageService {
         completedAt: session.completedAt ?? new Date().toISOString(),
       };
       history.push(newSession);
-      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
+      await this.saveWorkoutHistory(history);
       return newSession;
     } catch (error) {
       console.error('Error adding workout session:', error);
@@ -112,28 +128,23 @@ class StorageService {
   }
 
   async getWorkoutHistory() {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
-      return data ? JSON.parse(data) : [];
-    } catch (error) {
-      console.error('Error loading workout history:', error);
-      return [];
-    }
+    return this._get(STORAGE_KEYS.WORKOUT_HISTORY, []);
   }
 
   async saveWorkoutHistory(history) {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
-      return true;
-    } catch (error) {
-      console.error('Error saving workout history:', error);
-      return false;
-    }
+    return this._set(STORAGE_KEYS.WORKOUT_HISTORY, history);
   }
 
   async isWorkoutHistoryUnset() {
+    if (!currentUserId) return false;
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.WORKOUT_HISTORY);
+      const { data, error } = await supabase
+        .from('app_data')
+        .select('key')
+        .eq('user_id', currentUserId)
+        .eq('key', STORAGE_KEYS.WORKOUT_HISTORY)
+        .maybeSingle();
+      if (error) throw error;
       return data === null;
     } catch {
       return false;
@@ -146,7 +157,7 @@ class StorageService {
       const index = history.findIndex(s => s.id === id);
       if (index !== -1) {
         history[index] = { ...history[index], ...updates };
-        await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(history));
+        await this.saveWorkoutHistory(history);
         return history[index];
       }
       return null;
@@ -160,7 +171,7 @@ class StorageService {
     try {
       const history = await this.getWorkoutHistory();
       const filtered = history.filter(s => s.id !== id);
-      await AsyncStorage.setItem(STORAGE_KEYS.WORKOUT_HISTORY, JSON.stringify(filtered));
+      await this.saveWorkoutHistory(filtered);
       return true;
     } catch (error) {
       console.error('Error deleting workout session:', error);
@@ -169,48 +180,29 @@ class StorageService {
   }
 
   async saveProgressData(progressData) {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.PROGRESS_DATA, JSON.stringify(progressData));
-      return true;
-    } catch (error) {
-      console.error('Error saving progress data:', error);
-      return false;
-    }
+    return this._set(STORAGE_KEYS.PROGRESS_DATA, progressData);
   }
 
   async getProgressData() {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.PROGRESS_DATA);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error('Error loading progress data:', error);
-      return {};
-    }
+    return this._get(STORAGE_KEYS.PROGRESS_DATA, {});
   }
 
   async getFitnessData() {
-    try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.FITNESS_DATA);
-      return data ? JSON.parse(data) : {};
-    } catch (error) {
-      console.error('Error loading fitness data:', error);
-      return {};
-    }
+    return this._get(STORAGE_KEYS.FITNESS_DATA, {});
   }
 
   async saveFitnessData(fitnessData) {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.FITNESS_DATA, JSON.stringify(fitnessData));
-      return true;
-    } catch (error) {
-      console.error('Error saving fitness data:', error);
-      return false;
-    }
+    return this._set(STORAGE_KEYS.FITNESS_DATA, fitnessData);
   }
 
   async clearAllData() {
+    if (!currentUserId) return false;
     try {
-      await AsyncStorage.multiRemove(Object.values(STORAGE_KEYS));
+      const { error } = await supabase
+        .from('app_data')
+        .delete()
+        .eq('user_id', currentUserId);
+      if (error) throw error;
       return true;
     } catch (error) {
       console.error('Error clearing data:', error);
