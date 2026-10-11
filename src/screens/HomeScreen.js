@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, ActivityIndicator, LayoutAnimation, Platform,
+  ActivityIndicator, LayoutAnimation, Platform,
+  Modal, SafeAreaView,
 } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, {
-  Circle, Path, Defs, Stop,
+  Circle, Defs, Stop,
   LinearGradient as SvgGradient,
   Text as SvgText,
 } from 'react-native-svg';
@@ -17,35 +18,17 @@ import HeartRateCard from '../components/HeartRateCard';
 
 if (Platform.OS === 'android') LayoutAnimation.enabled = true;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CHART_W = SCREEN_WIDTH - 36;
-
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAY_LABELS = ['M','T','W','T','F','S','S'];
-const MON_LABELS = ['J','F','M','A','M','J','J','A','S','O','N','D'];
 
 const GOALS = { calories: 540, minutes: 60, workouts: 1 };
 const STEP_GOAL = 10000;
 const STEP_M = 0.762;
 const DIST_GOAL_KM = 8;
 
-const METRICS = [
-  { id: 'calories', label: 'Calories Burned', unit: 'kcal' },
-  { id: 'weight',   label: 'Body Weight',     unit: 'kg'   },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const toDateStr = d => d.toISOString().slice(0, 10);
-
-function getMondayOf(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-  return d;
-}
 
 function computeStreak(history) {
   if (!history.length) return 0;
@@ -64,158 +47,41 @@ function computeStreak(history) {
   return streak;
 }
 
-function sessionInPeriod(completedAt, period, monday, today) {
-  const d = new Date(completedAt);
-  if (period === 'week') {
-    const diff = Math.floor((d - monday) / 86400000);
-    return diff >= 0 && diff < 7;
-  }
-  if (period === 'month') return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
-  if (period === 'year')  return d.getFullYear() === today.getFullYear();
-  return true;
-}
-
-function buildSessionChartData(history, metricFn) {
-  const today = new Date();
-  const monday = getMondayOf(today);
-
-  const week = (() => {
-    const b = Array(7).fill(0);
-    history.forEach(s => {
-      const diff = Math.floor((new Date(s.completedAt) - monday) / 86400000);
-      if (diff >= 0 && diff < 7) b[diff] += metricFn(s);
-    });
-    return { labels: DAY_LABELS, data: b };
-  })();
-
-  const month = (() => {
-    const b = [0, 0, 0, 0];
-    history.forEach(s => {
-      const d = new Date(s.completedAt);
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth())
-        b[Math.min(Math.floor((d.getDate() - 1) / 7), 3)] += metricFn(s);
-    });
-    return { labels: ['W1','W2','W3','W4'], data: b };
-  })();
-
-  const year = (() => {
-    const b = Array(12).fill(0);
-    history.forEach(s => {
-      const d = new Date(s.completedAt);
-      if (d.getFullYear() === today.getFullYear()) b[d.getMonth()] += metricFn(s);
-    });
-    return { labels: MON_LABELS, data: b };
-  })();
-
-  const all = (() => {
-    const byYear = {};
-    history.forEach(s => {
-      const y = new Date(s.completedAt).getFullYear().toString();
-      byYear[y] = (byYear[y] || 0) + metricFn(s);
-    });
-    const years = Object.keys(byYear).sort();
-    return years.length
-      ? { labels: years, data: years.map(y => byYear[y]) }
-      : { labels: ['—'], data: [0] };
-  })();
-
-  return { week, month, year, all };
-}
-
-function buildWeightChartData(bodyMetrics) {
-  const today = new Date();
-  const monday = getMondayOf(today);
-
-  const forwardFill = arr => {
-    let last = 0;
-    return arr.map(v => { if (v > 0) last = v; return last; });
-  };
-
-  const week = (() => {
-    const b = Array(7).fill(0);
-    bodyMetrics.forEach(m => {
-      if (!m.weight) return;
-      const diff = Math.floor((new Date(m.date + 'T00:00:00') - monday) / 86400000);
-      if (diff >= 0 && diff < 7) b[diff] = m.weight;
-    });
-    return { labels: DAY_LABELS, data: forwardFill(b) };
-  })();
-
-  const month = (() => {
-    const b = [0, 0, 0, 0];
-    bodyMetrics.forEach(m => {
-      if (!m.weight) return;
-      const d = new Date(m.date + 'T00:00:00');
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth())
-        b[Math.min(Math.floor((d.getDate() - 1) / 7), 3)] = m.weight;
-    });
-    return { labels: ['W1','W2','W3','W4'], data: forwardFill(b) };
-  })();
-
-  const year = (() => {
-    const b = Array(12).fill(0);
-    bodyMetrics.forEach(m => {
-      if (!m.weight) return;
-      const d = new Date(m.date + 'T00:00:00');
-      if (d.getFullYear() === today.getFullYear()) b[d.getMonth()] = m.weight;
-    });
-    return { labels: MON_LABELS, data: forwardFill(b) };
-  })();
-
-  const all = (() => {
-    const byYear = {};
-    bodyMetrics.forEach(m => {
-      if (!m.weight) return;
-      byYear[new Date(m.date + 'T00:00:00').getFullYear().toString()] = m.weight;
-    });
-    const years = Object.keys(byYear).sort();
-    return years.length
-      ? { labels: years, data: years.map(y => byYear[y]) }
-      : { labels: ['—'], data: [0] };
-  })();
-
-  return { week, month, year, all };
-}
-
-function sumPeriod(history, period, metricFn) {
-  const today = new Date();
-  const monday = getMondayOf(today);
-  return history
-    .filter(s => sessionInPeriod(s.completedAt, period, monday, today))
-    .reduce((sum, s) => sum + metricFn(s), 0);
-}
-
-function prevPeriodSum(history, period, metricFn) {
-  const today = new Date();
-  const monday = getMondayOf(today);
-  return history.filter(s => {
-    const d = new Date(s.completedAt);
-    if (period === 'week') {
-      const prevMon = new Date(monday); prevMon.setDate(prevMon.getDate() - 7);
-      const diff = Math.floor((d - prevMon) / 86400000);
-      return diff >= 0 && diff < 7;
-    }
-    if (period === 'month') {
-      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-      return d.getFullYear() === prev.getFullYear() && d.getMonth() === prev.getMonth();
-    }
-    if (period === 'year') return d.getFullYear() === today.getFullYear() - 1;
-    return false;
-  }).reduce((sum, s) => sum + metricFn(s), 0);
-}
-
 function fmtDistance(steps) {
   const m = steps * STEP_M;
   return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
 }
 
-function fmtPct(curr, prev) {
-  if (!prev) return null;
-  const pct = ((curr - prev) / prev) * 100;
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`;
+function fmtDayLabel(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${DAY_NAMES[d.getDay()]}, ${MON_NAMES[d.getMonth()]} ${d.getDate()}`;
 }
 
-// ─── Activity ring ────────────────────────────────────────────────────────────
+function getMotivation(progress, streak, firstName, hour) {
+  if (progress >= 1) return `Goals crushed today, ${firstName}. Outstanding work.`;
+  if (progress >= 0.75) return `Almost there — one more push and you're done.`;
+  if (progress >= 0.5) return `Over halfway through your goals. Keep the momentum going.`;
+  if (progress > 0) {
+    if (hour < 14) return `You've made a start, ${firstName}. Build on it.`;
+    if (hour < 19) return `Good progress. The afternoon push is where goals get made.`;
+    return `Still grinding — finish what you started today.`;
+  }
+  if (streak >= 7) return `${streak} days in a row. Don't let today break the chain.`;
+  if (hour < 10) return `Rise and go, ${firstName}. Your goals are waiting.`;
+  if (hour < 14) return `Morning's yours. Time to move, ${firstName}.`;
+  if (hour < 19) return `Every rep counts. Get moving this afternoon.`;
+  return `There's still time to hit your goals tonight. Let's go.`;
+}
+
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+
+const ProgressBar = ({ progress, color, height = 4 }) => (
+  <View style={{ height, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: height / 2, marginTop: 8, overflow: 'hidden' }}>
+    <View style={{ width: `${Math.min(progress * 100, 100)}%`, height, backgroundColor: color, borderRadius: height / 2 }} />
+  </View>
+);
+
+// ─── Activity ring ─────────────────────────────────────────────────────────────
 
 const ActivityRing = ({ progress = 0 }) => {
   const r = 30;
@@ -276,83 +142,161 @@ const HourlyBarChart = ({ data }) => {
   );
 };
 
-// ─── Area chart ───────────────────────────────────────────────────────────────
+// ─── Day Browser Modal ────────────────────────────────────────────────────────
 
-const AreaChart = ({ data, labels }) => {
-  if (!data || data.length < 2) return null;
-  if (data.every(v => v === 0)) {
-    return (
-      <View style={styles.emptyChart}>
-        <Ionicons name="analytics-outline" size={24} color={Colors.gray} />
-        <Text style={styles.emptyChartText}>No data for this period</Text>
-      </View>
-    );
-  }
-  const VW = 300; const VH = 100; const PAD = 10;
-  const max = Math.max(...data); const min = Math.min(...data);
-  const range = max - min || 1;
-  const w = VW - PAD * 2; const h = VH - PAD * 2;
-  const pts = data.map((v, i) => ({
-    x: PAD + (i / (data.length - 1)) * w,
-    y: PAD + h - ((v - min) / range) * h,
-  }));
-  const maxIdx = data.indexOf(max);
-  const line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const area = `${line} L ${pts[pts.length - 1].x.toFixed(1)} ${VH} L ${pts[0].x.toFixed(1)} ${VH} Z`;
+const DayBrowserModal = ({ visible, onClose, history, bodyMetrics, fitnessData, todayStr }) => {
+  const [browsedDate, setBrowsedDate] = useState(todayStr);
+
+  useEffect(() => {
+    if (visible) setBrowsedDate(todayStr);
+  }, [visible, todayStr]);
+
+  const isToday = browsedDate === todayStr;
+
+  const goBack = () => {
+    const d = new Date(browsedDate + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    setBrowsedDate(toDateStr(d));
+  };
+
+  const goForward = () => {
+    if (isToday) return;
+    const d = new Date(browsedDate + 'T12:00:00');
+    d.setDate(d.getDate() + 1);
+    const next = toDateStr(d);
+    if (next <= todayStr) setBrowsedDate(next);
+  };
+
+  const daySessions = history.filter(s => s.completedAt.slice(0, 10) === browsedDate);
+  const dayCalsBurned = daySessions.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
+  const dayMins = daySessions.reduce((s, x) => s + (x.duration || 0), 0);
+
+  const dayMetric = bodyMetrics.find(m => m.date && m.date.slice(0, 10) === browsedDate);
+  const dayFitness = fitnessData[browsedDate] || {};
+  const dayWeight = dayMetric?.weight || dayFitness.weight || null;
+  const dayConsumed = dayMetric?.caloriesConsumed || dayFitness.caloriesConsumed || null;
+
+  const dateLabel = isToday ? 'Today' : fmtDayLabel(browsedDate);
 
   return (
-    <View>
-      <Svg width={CHART_W} height={110} viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none">
-        <Defs>
-          <SvgGradient id="areaG" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={Colors.text} stopOpacity={0.35} />
-            <Stop offset="100%" stopColor={Colors.text} stopOpacity={0} />
-          </SvgGradient>
-        </Defs>
-        <Path d={area} fill="url(#areaG)" />
-        <Path d={line} fill="none" stroke={Colors.text} strokeWidth={2.5} />
-        <Circle cx={pts[maxIdx].x} cy={pts[maxIdx].y} r={5} fill={Colors.text} />
-        <Circle cx={pts[maxIdx].x} cy={pts[maxIdx].y} r={10} fill={Colors.text} opacity={0.2} />
-      </Svg>
-      <View style={styles.chartLabels}>
-        {labels.map((l, i) => (
-          <Text key={i} style={[styles.chartLabel, i === maxIdx && styles.chartLabelActive]}>{l}</Text>
-        ))}
-      </View>
-    </View>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalSafe}>
+        {/* Modal header */}
+        <View style={styles.modalHeader}>
+          <View style={{ width: 60 }} />
+          <Text style={styles.modalTitle}>Daily Summary</Text>
+          <TouchableOpacity onPress={onClose} style={styles.modalDoneBtn}>
+            <Text style={styles.modalDone}>Done</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Date navigation */}
+        <View style={styles.dateNav}>
+          <TouchableOpacity onPress={goBack} style={styles.dateNavBtn}>
+            <Ionicons name="chevron-back" size={22} color={Colors.text} />
+          </TouchableOpacity>
+          <View style={styles.dateNavCenter}>
+            <Text style={styles.dateNavLabel}>{dateLabel}</Text>
+            {!isToday && <Text style={styles.dateNavSub}>{browsedDate}</Text>}
+          </View>
+          <TouchableOpacity onPress={goForward} style={styles.dateNavBtn} disabled={isToday}>
+            <Ionicons name="chevron-forward" size={22} color={isToday ? Colors.borderColor : Colors.text} />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.modalScroll}>
+          {/* Stats grid */}
+          <View style={styles.dayStatsGrid}>
+            <View style={styles.dayStatCard}>
+              <View style={[styles.dayStatIcon, { backgroundColor: 'rgba(88,216,219,0.12)' }]}>
+                <Ionicons name="scale-outline" size={18} color={Colors.text} />
+              </View>
+              <Text style={styles.dayStatLabel}>WEIGHT</Text>
+              <Text style={styles.dayStatValue}>{dayWeight != null ? `${dayWeight} kg` : '—'}</Text>
+            </View>
+            <View style={styles.dayStatCard}>
+              <View style={[styles.dayStatIcon, { backgroundColor: 'rgba(251,191,36,0.12)' }]}>
+                <Ionicons name="restaurant-outline" size={18} color={Colors.amber} />
+              </View>
+              <Text style={styles.dayStatLabel}>CONSUMED</Text>
+              <Text style={styles.dayStatValue}>{dayConsumed != null ? `${dayConsumed} kcal` : '—'}</Text>
+            </View>
+            <View style={styles.dayStatCard}>
+              <View style={[styles.dayStatIcon, { backgroundColor: 'rgba(248,113,113,0.12)' }]}>
+                <Ionicons name="flame-outline" size={18} color={Colors.softRed} />
+              </View>
+              <Text style={styles.dayStatLabel}>BURNED</Text>
+              <Text style={styles.dayStatValue}>{dayCalsBurned ? `${dayCalsBurned} kcal` : '—'}</Text>
+            </View>
+            <View style={styles.dayStatCard}>
+              <View style={[styles.dayStatIcon, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
+                <Ionicons name="time-outline" size={18} color={Colors.indigo} />
+              </View>
+              <Text style={styles.dayStatLabel}>ACTIVE</Text>
+              <Text style={styles.dayStatValue}>{dayMins ? `${dayMins} min` : '—'}</Text>
+            </View>
+          </View>
+
+          {/* Workouts */}
+          <Text style={styles.daySectionTitle}>WORKOUTS</Text>
+          {daySessions.length === 0 ? (
+            <View style={styles.dayEmpty}>
+              <Ionicons name="barbell-outline" size={32} color={Colors.borderColor} />
+              <Text style={styles.dayEmptyText}>No workouts logged</Text>
+            </View>
+          ) : (
+            daySessions.map(session => (
+              <View key={session.id} style={styles.daySessionCard}>
+                <View style={styles.daySessionRow}>
+                  <Text style={styles.daySessionName}>{session.name}</Text>
+                  <Text style={styles.daySessionCals}>{session.caloriesBurned || 0} kcal</Text>
+                </View>
+                <Text style={styles.daySessionMeta}>
+                  {session.duration} min · {session.exercises?.length || session.exerciseCount || 0} exercises
+                </Text>
+                {session.notes ? (
+                  <Text style={styles.daySessionNotes}>{session.notes}</Text>
+                ) : null}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   );
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const HomeScreen = () => {
-  const [selectedMetric, setSelectedMetric] = useState('calories');
-  const [timePeriod, setTimePeriod] = useState('week');
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [bodyMetrics, setBodyMetrics] = useState([]);
+  const [fitnessData, setFitnessData] = useState({});
   const [profile, setProfile] = useState(null);
   const [stepsToday, setStepsToday] = useState(null);
   const [hourlySteps, setHourlySteps] = useState(Array(24).fill(0));
   const [pedometerAvailable, setPedometerAvailable] = useState(null);
   const [stepsExpanded, setStepsExpanded] = useState(false);
   const [distanceExpanded, setDistanceExpanded] = useState(false);
+  const [dayBrowserVisible, setDayBrowserVisible] = useState(false);
 
   useFocusEffect(useCallback(() => {
     let active = true;
     (async () => {
-      const [hist, prog, prof] = await Promise.all([
+      const [hist, prog, prof, fit] = await Promise.all([
         StorageService.getWorkoutHistory(),
         StorageService.getProgressData(),
         StorageService.getUserProfile(),
+        StorageService.getFitnessData(),
       ]);
       if (!active) return;
       setHistory(hist || []);
       setBodyMetrics(((prog?.bodyMetrics) || []).sort((a, b) => a.date.localeCompare(b.date)));
       setProfile(prof);
+      setFitnessData(fit || {});
       setLoading(false);
 
-      // Pedometer
       try {
         const available = await Pedometer.isAvailableAsync();
         if (!active) return;
@@ -386,58 +330,35 @@ const HomeScreen = () => {
   }, []));
 
   const today = new Date();
-  const monday = getMondayOf(today);
   const todayStr = toDateStr(today);
 
-  // Today's stats
+  // Today's workout stats
   const todaySessions = history.filter(s => s.completedAt.slice(0, 10) === todayStr);
-  const todayCals  = todaySessions.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
-  const todayMins  = todaySessions.reduce((s, x) => s + (x.duration || 0), 0);
+  const todayCalsBurned = todaySessions.reduce((s, x) => s + (x.caloriesBurned || 0), 0);
+  const todayMins = todaySessions.reduce((s, x) => s + (x.duration || 0), 0);
   const todayCount = todaySessions.length;
-  const ringProgress = Math.min(todayMins / GOALS.minutes, 1);
 
-  // Streak
+  // Today's body metrics (check both progress_data and fitness_data)
+  const todayMetric = bodyMetrics.find(m => m.date && m.date.slice(0, 10) === todayStr);
+  const todayFitness = fitnessData[todayStr] || {};
+  const todayWeight = todayMetric?.weight || todayFitness.weight || null;
+  const todayConsumed = todayMetric?.caloriesConsumed || todayFitness.caloriesConsumed || null;
+
+  // Goals ring: average completion across all 3 goals
+  const ringProgress = Math.min(
+    (Math.min(todayCalsBurned / GOALS.calories, 1) +
+     Math.min(todayMins / GOALS.minutes, 1) +
+     Math.min(todayCount / GOALS.workouts, 1)) / 3,
+    1
+  );
+
   const streak = computeStreak(history);
-
-  // Chart data
-  const chartData = {
-    calories: buildSessionChartData(history, s => s.caloriesBurned || 0),
-    weight:   buildWeightChartData(bodyMetrics),
-  };
-  const currentData = chartData[selectedMetric]?.[timePeriod] || { labels: [], data: [] };
-
-  // Period totals for the big number
-  const periodCals   = sumPeriod(history, timePeriod, s => s.caloriesBurned || 0);
-  const periodWeight = (() => {
-    const filtered = bodyMetrics.filter(m => {
-      if (!m.weight) return false;
-      return sessionInPeriod(m.date + 'T00:00:00', timePeriod, monday, today);
-    });
-    return filtered.length ? filtered[filtered.length - 1].weight : null;
-  })();
-
-  const bigNum = {
-    calories: { value: periodCals.toLocaleString(), unit: 'kcal' },
-    weight:   { value: periodWeight != null ? String(periodWeight) : '—', unit: 'kg' },
-  }[selectedMetric];
-
-  // Trend vs previous period
-  const trend = (() => {
-    if (selectedMetric === 'weight') return null;
-    const fn = selectedMetric === 'calories' ? (s => s.caloriesBurned || 0) : null;
-    if (!fn) return null;
-    return fmtPct(sumPeriod(history, timePeriod, fn), prevPeriodSum(history, timePeriod, fn));
-  })();
-  const trendUp = trend ? !trend.startsWith('-') && !trend.startsWith('−') : true;
-
-
-  // User display
+  const hour = today.getHours();
   const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
-  const initials  = profile?.name
+  const initials = profile?.name
     ? profile.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  const currentMetricObj = METRICS.find(m => m.id === selectedMetric);
   const DAY = DAY_NAMES[today.getDay()];
   const MON = MON_NAMES[today.getMonth()];
 
@@ -463,88 +384,79 @@ const HomeScreen = () => {
         </View>
       </View>
 
-      {/* Hero card */}
-      <View style={styles.heroCard}>
+      {/* Hero card — tap to browse history */}
+      <TouchableOpacity
+        style={styles.heroCard}
+        onPress={() => setDayBrowserVisible(true)}
+        activeOpacity={0.85}
+      >
         <View style={styles.heroTop}>
-          <View>
-            <Text style={styles.heroLabel}>TODAY'S STREAK</Text>
-            <View style={styles.heroStreakRow}>
-              <Text style={styles.heroStreakNum}>{streak}</Text>
-              <Text style={styles.heroStreakUnit}> days</Text>
-            </View>
-          </View>
+          <Text style={styles.heroLabel}>TODAY'S GOAL</Text>
           <ActivityRing progress={ringProgress} />
         </View>
-        <View style={styles.heroDivider} />
-        <View style={styles.heroStatsRow}>
-          {[
-            { l: 'Calories',   v: String(todayCals),  sub: `/ ${GOALS.calories}` },
-            { l: 'Active min', v: String(todayMins),  sub: `/ ${GOALS.minutes}`  },
-            { l: 'Workouts',   v: String(todayCount), sub: `/ ${GOALS.workouts}` },
-          ].map((s, i) => (
-            <View key={s.l} style={[styles.heroStatItem, i > 0 && { borderLeftWidth: 1, borderLeftColor: 'rgba(88,216,219,0.15)' }]}>
-              <Text style={styles.heroStatLabel}>{s.l.toUpperCase()}</Text>
-              <View style={styles.heroStatValueRow}>
-                <Text style={styles.heroStatValue}>{s.v}</Text>
-                <Text style={styles.heroStatSub}> {s.sub}</Text>
-              </View>
+
+        <Text style={styles.heroMotivation}>
+          {getMotivation(ringProgress, streak, firstName, hour)}
+        </Text>
+
+        <View style={styles.heroMeta}>
+          <View style={styles.heroMetaLeft}>
+            <View style={styles.heroMetaPill}>
+              <Ionicons name="flame" size={13} color={Colors.text} />
+              <Text style={styles.heroMetaText}>{streak} day streak</Text>
             </View>
-          ))}
+            {todayWeight != null && (
+              <View style={styles.heroMetaPill}>
+                <Ionicons name="scale-outline" size={13} color={Colors.gray} />
+                <Text style={styles.heroMetaText}>{todayWeight} kg</Text>
+              </View>
+            )}
+          </View>
+          <View style={styles.heroBrowseHint}>
+            <Text style={styles.heroBrowseText}>history</Text>
+            <Ionicons name="chevron-forward" size={12} color={Colors.gray} />
+          </View>
+        </View>
+      </TouchableOpacity>
+
+      {/* Calories Consumed */}
+      <View style={styles.statCard}>
+        <View style={[styles.statIconBg, { backgroundColor: 'rgba(251,191,36,0.15)' }]}>
+          <Ionicons name="restaurant-outline" size={18} color={Colors.amber} />
+        </View>
+        <View style={styles.statCardContent}>
+          <Text style={styles.statCardLabel}>CALORIES CONSUMED</Text>
+          <View style={styles.statCardValueRow}>
+            <Text style={styles.statCardValue}>
+              {todayConsumed != null ? todayConsumed.toLocaleString() : '—'}
+            </Text>
+            {todayConsumed != null && <Text style={styles.statCardUnit}> kcal</Text>}
+          </View>
         </View>
       </View>
 
-      {/* Heart rate card */}
+      {/* Calories Burned */}
+      <View style={styles.statCard}>
+        <View style={[styles.statIconBg, { backgroundColor: 'rgba(248,113,113,0.15)' }]}>
+          <Ionicons name="flame-outline" size={18} color={Colors.softRed} />
+        </View>
+        <View style={styles.statCardContent}>
+          <Text style={styles.statCardLabel}>CALORIES BURNED</Text>
+          <View style={styles.statCardValueRow}>
+            <Text style={styles.statCardValue}>{todayCalsBurned.toLocaleString()}</Text>
+            <Text style={styles.statCardUnit}> / {GOALS.calories} kcal</Text>
+          </View>
+          <ProgressBar progress={todayCalsBurned / GOALS.calories} color={Colors.softRed} />
+        </View>
+        {todayCalsBurned >= GOALS.calories && (
+          <Ionicons name="checkmark-circle" size={20} color={Colors.green} style={{ marginLeft: 4 }} />
+        )}
+      </View>
+
+      {/* Heart rate (with today's sparkline) */}
       <HeartRateCard />
 
-      {/* Period selector */}
-      <View style={styles.periodSelector}>
-        {['Week','Month','Year','All'].map((p, i) => {
-          const id = ['week','month','year','all'][i];
-          const active = timePeriod === id;
-          return (
-            <TouchableOpacity key={p} style={[styles.periodBtn, active && styles.periodBtnActive]} onPress={() => setTimePeriod(id)}>
-              <Text style={[styles.periodBtnText, active && styles.periodBtnTextActive]}>{p}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Chart card */}
-      <View style={styles.chartCard}>
-        <View style={styles.chartCardTop}>
-          <View>
-            <Text style={styles.chartCardLabel}>{currentMetricObj.label.toUpperCase()}</Text>
-            <View style={styles.chartCardValueRow}>
-              <Text style={styles.chartCardBigValue}>{bigNum.value}</Text>
-              {bigNum.unit ? <Text style={styles.chartCardUnit}> {bigNum.unit}</Text> : null}
-            </View>
-          </View>
-          {trend ? (
-            <View style={[styles.trendBadge, !trendUp && styles.trendBadgeDown]}>
-              <Ionicons name={trendUp ? 'trending-up' : 'trending-down'} size={12} color={trendUp ? Colors.green : Colors.softRed} />
-              <Text style={[styles.trendText, !trendUp && { color: Colors.softRed }]}> {trend}</Text>
-            </View>
-          ) : null}
-        </View>
-        <AreaChart data={currentData.data} labels={currentData.labels} />
-      </View>
-
-      {/* Metric selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.metricScroll} contentContainerStyle={styles.metricScrollContent}>
-        {METRICS.map(m => (
-          <TouchableOpacity
-            key={m.id}
-            style={[styles.metricPill, selectedMetric === m.id && styles.metricPillActive]}
-            onPress={() => setSelectedMetric(m.id)}
-          >
-            <Text style={[styles.metricPillText, selectedMetric === m.id && styles.metricPillTextActive]}>
-              {m.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Steps card */}
+      {/* Steps */}
       <TouchableOpacity
         style={styles.stepCard}
         onPress={() => {
@@ -577,6 +489,9 @@ const HomeScreen = () => {
             <Ionicons name={stepsExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
           </View>
         </View>
+        {stepsToday !== null && (
+          <ProgressBar progress={stepsToday / STEP_GOAL} color={Colors.amber} />
+        )}
         {stepsExpanded && (
           stepsToday !== null && pedometerAvailable
             ? <HourlyBarChart data={hourlySteps} />
@@ -584,7 +499,7 @@ const HomeScreen = () => {
         )}
       </TouchableOpacity>
 
-      {/* Distance card */}
+      {/* Distance */}
       <TouchableOpacity
         style={styles.stepCard}
         onPress={() => {
@@ -616,12 +531,25 @@ const HomeScreen = () => {
             <Ionicons name={distanceExpanded ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
           </View>
         </View>
+        {stepsToday !== null && (
+          <ProgressBar progress={stepsToday * STEP_M / 1000 / DIST_GOAL_KM} color={Colors.indigo} />
+        )}
         {distanceExpanded && (
           stepsToday !== null && pedometerAvailable
             ? <HourlyBarChart data={hourlySteps.map(s => Math.round(s * STEP_M))} />
             : <Text style={styles.stepUnavail}>Motion data not available on this device</Text>
         )}
       </TouchableOpacity>
+
+      {/* Day browser */}
+      <DayBrowserModal
+        visible={dayBrowserVisible}
+        onClose={() => setDayBrowserVisible(false)}
+        history={history}
+        bodyMetrics={bodyMetrics}
+        fitnessData={fitnessData}
+        todayStr={todayStr}
+      />
 
     </ScrollView>
   );
@@ -635,7 +563,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 20, paddingTop: 52, paddingBottom: 8,
   },
-  headerDate: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
+  headerDate:     { fontSize: 13, color: Colors.gray, fontWeight: '500' },
   headerGreeting: { fontSize: 26, fontWeight: '700', color: '#FFFFFF', marginTop: 2 },
   avatar: {
     width: 40, height: 40, borderRadius: 999,
@@ -651,91 +579,120 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(88,216,219,0.08)',
     borderWidth: 1, borderColor: 'rgba(88,216,219,0.22)',
   },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  heroLabel: { fontSize: 11, color: Colors.text, fontWeight: '600', letterSpacing: 1.2 },
-  heroStreakRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6 },
-  heroStreakNum: { fontSize: 44, fontWeight: '800', color: '#FFFFFF', lineHeight: 48 },
-  heroStreakUnit: { fontSize: 16, color: Colors.textSecondary },
-  heroDivider: { height: 1, backgroundColor: 'rgba(88,216,219,0.15)', marginVertical: 14 },
-  heroStatsRow: { flexDirection: 'row' },
-  heroStatItem: { flex: 1, paddingHorizontal: 10 },
-  heroStatLabel: { fontSize: 10, color: Colors.gray, letterSpacing: 0.8, marginBottom: 4 },
-  heroStatValueRow: { flexDirection: 'row', alignItems: 'baseline' },
-  heroStatValue: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  heroStatSub: { fontSize: 11, color: Colors.gray },
+  heroTop:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
+  heroLabel:      { fontSize: 11, color: Colors.text, fontWeight: '600', letterSpacing: 1.2 },
+  heroMotivation: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', lineHeight: 24, marginBottom: 16 },
+  heroMeta:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroMetaLeft:   { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  heroMetaPill:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.07)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  heroMetaText:   { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
+  heroBrowseHint: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  heroBrowseText: { fontSize: 11, color: Colors.gray },
 
-  // Period selector
-  periodSelector: {
-    flexDirection: 'row', marginHorizontal: 18, marginBottom: 14,
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 12, padding: 4,
-    borderWidth: 1, borderColor: Colors.borderColor,
-  },
-  periodBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 9 },
-  periodBtnActive: { backgroundColor: Colors.background, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 2, elevation: 2 },
-  periodBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
-  periodBtnTextActive: { color: '#FFFFFF' },
-
-  // Chart card
-  chartCard: {
+  // Stat cards (calories consumed / burned)
+  statCard: {
     marginHorizontal: 18, marginBottom: 12,
-    padding: 18, backgroundColor: Colors.cardBackground,
+    padding: 16,
+    backgroundColor: Colors.cardBackground,
     borderRadius: 18, borderWidth: 1, borderColor: Colors.borderColor,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
   },
-  chartCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  chartCardLabel: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6 },
-  chartCardValueRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 4 },
-  chartCardBigValue: { fontSize: 28, fontWeight: '800', color: '#FFFFFF' },
-  chartCardUnit: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
-  trendBadge: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(52,211,153,0.12)',
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  statIconBg: {
+    width: 42, height: 42, borderRadius: 13,
+    justifyContent: 'center', alignItems: 'center',
   },
-  trendBadgeDown: { backgroundColor: 'rgba(248,113,113,0.12)' },
-  trendText: { fontSize: 12, color: Colors.green, fontWeight: '600' },
-  emptyChart: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28, gap: 6 },
-  emptyChartText: { fontSize: 13, color: Colors.gray },
-  chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
-  chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
-  chartLabelActive: { color: '#FFFFFF', fontWeight: '700' },
+  statCardContent:  { flex: 1 },
+  statCardLabel:    { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.8, marginBottom: 2 },
+  statCardValueRow: { flexDirection: 'row', alignItems: 'baseline' },
+  statCardValue:    { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
+  statCardUnit:     { fontSize: 12, color: Colors.gray, fontWeight: '500' },
 
-  // Step cards
+  // Step / distance cards
   stepCard: {
     marginHorizontal: 18, marginBottom: 12,
     padding: 16, backgroundColor: Colors.cardBackground,
     borderRadius: 18, borderWidth: 1, borderColor: Colors.borderColor,
   },
-  stepCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  stepCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  stepIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(245,158,11,0.15)', justifyContent: 'center', alignItems: 'center' },
-  stepCardLabel: { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.8, marginBottom: 2 },
+  stepCardTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  stepCardLeft:  { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stepIconBg: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(245,158,11,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  stepCardLabel:    { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.8, marginBottom: 2 },
   stepCardValueRow: { flexDirection: 'row', alignItems: 'baseline' },
-  stepCardValue: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
-  stepCardUnit: { fontSize: 12, color: Colors.gray, fontWeight: '500' },
-  stepCardRight: { alignItems: 'flex-end', gap: 4 },
-  stepGoalPct: { fontSize: 11, color: Colors.gray, fontWeight: '600' },
-  stepUnavail: { fontSize: 12, color: Colors.gray, marginTop: 14, textAlign: 'center', paddingBottom: 4 },
+  stepCardValue:    { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
+  stepCardUnit:     { fontSize: 12, color: Colors.gray, fontWeight: '500' },
+  stepCardRight:    { alignItems: 'flex-end', gap: 4 },
+  stepGoalPct:  { fontSize: 11, color: Colors.gray, fontWeight: '600' },
+  stepUnavail:  { fontSize: 12, color: Colors.gray, marginTop: 14, textAlign: 'center', paddingBottom: 4 },
 
   // Hourly bar chart
-  hourlyChart: { marginTop: 16 },
-  hourlyBars: { flexDirection: 'row', alignItems: 'flex-end', height: 56, gap: 2 },
-  hourlyBar: { flex: 1, borderRadius: 3 },
+  hourlyChart:  { marginTop: 16 },
+  hourlyBars:   { flexDirection: 'row', alignItems: 'flex-end', height: 56, gap: 2 },
+  hourlyBar:    { flex: 1, borderRadius: 3 },
   hourlyLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
-  hourlyLabel: { fontSize: 9, color: Colors.gray, fontWeight: '500' },
+  hourlyLabel:  { fontSize: 9, color: Colors.gray, fontWeight: '500' },
 
-  // Metric selector pills
-  metricScroll: { marginBottom: 14 },
-  metricScrollContent: { paddingHorizontal: 18, gap: 8 },
-  metricPill: {
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: Colors.cardBackground,
-    borderWidth: 1, borderColor: Colors.borderColor,
+  // Day Browser Modal
+  modalSafe: { flex: 1, backgroundColor: Colors.background },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 18, paddingTop: 16, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderColor,
   },
-  metricPillActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  metricPillText: { fontSize: 13, color: Colors.gray, fontWeight: '500' },
-  metricPillTextActive: { color: '#FFFFFF' },
+  modalTitle:   { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
+  modalDoneBtn: { width: 60, alignItems: 'flex-end' },
+  modalDone:    { fontSize: 16, color: Colors.text, fontWeight: '600' },
 
+  dateNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 8, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: Colors.borderColor,
+  },
+  dateNavBtn:    { padding: 8 },
+  dateNavCenter: { flex: 1, alignItems: 'center' },
+  dateNavLabel:  { fontSize: 17, fontWeight: '700', color: '#FFFFFF' },
+  dateNavSub:    { fontSize: 12, color: Colors.gray, marginTop: 2 },
+
+  modalScroll: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 40 },
+
+  dayStatsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24,
+  },
+  dayStatCard: {
+    width: '47.5%',
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16, borderWidth: 1, borderColor: Colors.borderColor,
+    padding: 14, alignItems: 'flex-start', gap: 8,
+  },
+  dayStatIcon: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  dayStatLabel: { fontSize: 10, color: Colors.gray, fontWeight: '600', letterSpacing: 0.6 },
+  dayStatValue: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
+
+  daySectionTitle: {
+    fontSize: 11, color: Colors.gray, fontWeight: '700', letterSpacing: 1,
+    marginBottom: 10,
+  },
+  dayEmpty: {
+    alignItems: 'center', paddingVertical: 32,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 16, borderWidth: 1, borderColor: Colors.borderColor,
+    gap: 10,
+  },
+  dayEmptyText: { fontSize: 14, color: Colors.gray },
+
+  daySessionCard: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 14, borderWidth: 1, borderColor: Colors.borderColor,
+    padding: 14, marginBottom: 10,
+  },
+  daySessionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  daySessionName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', flex: 1 },
+  daySessionCals: { fontSize: 13, color: Colors.softRed, fontWeight: '600' },
+  daySessionMeta: { fontSize: 12, color: Colors.gray },
+  daySessionNotes: { fontSize: 12, color: Colors.textSecondary, marginTop: 6, fontStyle: 'italic' },
 });
 
 export default HomeScreen;
