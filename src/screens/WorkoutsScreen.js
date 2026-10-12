@@ -10,6 +10,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
+import showAlert from '../utils/showAlert';
 import { Colors } from '../constants/colors';
 import CalendarScreen from './CalendarScreen';
 import { EXERCISE_LIST } from '../constants/exercises';
@@ -295,7 +296,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
   const handleSaveEdit = async () => {
     const namedExercises = (editedSession.exercises || []).filter(ex => ex.name?.trim());
     const hasEmptyReps = namedExercises.some(ex => ex.sets.some(s => !String(s.reps).trim()));
-    if (hasEmptyReps) { Alert.alert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
+    if (hasEmptyReps) { showAlert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
     const cleanExercises = (editedSession.exercises || []).map(({ _key, ...ex }) => ({
       ...ex,
       sets: ex.sets.map(s => ({ ...s, weight: String(s.weight).trim() || '0' })),
@@ -396,9 +397,9 @@ const WorkoutsScreen = ({ route, navigation }) => {
 
   const handleLogWorkout = async () => {
     const namedExercises = logExercises.filter(ex => ex.name.trim());
-    if (!namedExercises.length) { Alert.alert('No exercises', 'Please add at least one exercise before saving.'); return; }
+    if (!namedExercises.length) { showAlert('No exercises', 'Please add at least one exercise before saving.'); return; }
     const hasEmptyReps = namedExercises.some(ex => ex.sets.some(s => !String(s.reps).trim()));
-    if (hasEmptyReps) { Alert.alert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
+    if (hasEmptyReps) { showAlert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
     const cleanExercises = namedExercises.map(({ _key, ...ex }) => ({
       ...ex,
       sets: ex.sets.map(s => ({ ...s, weight: String(s.weight).trim() || '0' })),

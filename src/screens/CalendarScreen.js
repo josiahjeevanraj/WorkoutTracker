@@ -10,6 +10,7 @@ const { width: SCREEN_W } = Dimensions.get('window');
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import StorageService from '../services/StorageService';
+import showAlert from '../utils/showAlert';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -234,7 +235,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
 
   // ─── Edit handlers ───────────────────────────────────────────────────────────
   const startEditing = () => {
-    if (!selectedDate) { Alert.alert('No Date Selected', 'Please select a date first.'); return; }
+    if (!selectedDate) { showAlert('No Date Selected', 'Please select a date first.'); return; }
     const existing = fitnessData[selectedDate];
     setEditingData(existing ? {
       caloriesConsumed: existing.caloriesConsumed.toString(),
@@ -258,7 +259,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
     setFitnessData(updated);
     StorageService.saveFitnessData(updated).catch(console.error);
     setIsEditing(false); setShowWorkoutSelector(false); setExpandedCategories({});
-    Alert.alert('Success', 'Data saved!');
+    showAlert('Success', 'Data saved!');
   };
 
   const cancelEditing = () => {
@@ -318,7 +319,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   };
 
   const addWorkoutWithDuration = () => {
-    if (!durationInput.trim()) { Alert.alert('Missing Duration', 'Please enter the duration.'); return; }
+    if (!durationInput.trim()) { showAlert('Missing Duration', 'Please enter the duration.'); return; }
     addWorkout(`${selectedExercise} - ${durationInput} mins`);
     setShowDurationModal(false); setDurationInput(''); setSelectedExercise('');
   };
@@ -329,7 +330,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
 
   const addStrengthWorkout = () => {
     const valid = strengthInput.sets.filter(s => s.reps.trim());
-    if (!valid.length) { Alert.alert('Missing Data', 'Please enter reps for at least one set.'); return; }
+    if (!valid.length) { showAlert('Missing Data', 'Please enter reps for at least one set.'); return; }
     const sets = valid.map((s, i) => `Set ${i + 1}: ${s.weight.trim() ? `${s.weight}kg x ${s.reps}` : s.reps}`).join(', ');
     addWorkout(`${selectedExercise} - ${sets}`);
     setShowStrengthModal(false); setStrengthInput({ sets: [] }); setSelectedExercise('');
