@@ -1,16 +1,17 @@
 // Color scheme for the Workout Tracking App
 export const Colors = {
   // Primary colors from FWT-4 ticket
-  text: '#58d8db',        // Cyan/Turquoise - for wordings
-  primary: '#283b89',     // Dark Blue - for highlights and interactive elements
-  background: '#111928',  // Dark Navy - main UI color
+  text: '#FFE600',        // Yellow accent - highlighted wording, icons, values
+  primary: '#FFE600',     // Yellow accent - primary buttons and active states
+  onPrimary: '#0E0E0E',   // Text/icons drawn on primary (yellow) fills
+  background: '#0E0E0E',  // Near-black - main UI color
 
   // Supporting colors
   white: '#FFFFFF',
   black: '#000000',
-  gray: '#6B7280',
+  gray: '#8A8A8A',
   lightGray: '#E5E7EB',
-  darkGray: '#374151',
+  darkGray: '#2B2B2B',
 
   // Status colors
   success: '#10B981',
@@ -19,13 +20,13 @@ export const Colors = {
   info: '#3B82F6',
 
   // Component specific
-  cardBackground: '#1F2937',
-  modalBackground: 'rgba(17, 25, 40, 0.9)',
-  borderColor: '#374151',
+  cardBackground: '#1A1A1A',
+  modalBackground: 'rgba(0, 0, 0, 0.85)',
+  borderColor: '#2B2B2B',
 
   // Chart colors (updated to match theme)
-  chartPrimary: '#283b89',
-  chartSecondary: '#58d8db',
+  chartPrimary: '#FFE600',
+  chartSecondary: '#FFFFFF',
   chartAccent: '#10B981',
 
   // Extended palette
@@ -33,7 +34,7 @@ export const Colors = {
   green: '#34D399',
   softRed: '#F87171',
   amber: '#FBBF24',
-  textSecondary: '#B0BEC5',
+  textSecondary: '#B8B8B8',
 };
 
 export default Colors;

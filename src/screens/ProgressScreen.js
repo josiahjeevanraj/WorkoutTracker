@@ -732,7 +732,7 @@ const ProgressScreen = () => {
                 style={[styles.metricPill, selectedMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
                 onPress={() => setSelectedMetric(m.id)}
               >
-                <Text style={[styles.metricPillText, selectedMetric === m.id && styles.metricPillTextActive]}>
+                <Text style={[styles.metricPillText, selectedMetric === m.id && styles.metricPillTextActive, selectedMetric === m.id && m.color === Colors.primary && { color: Colors.onPrimary }]}>
                   {m.label}
                 </Text>
               </TouchableOpacity>
@@ -892,7 +892,7 @@ const ProgressScreen = () => {
                       style={[styles.metricPill, strengthMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
                       onPress={() => setStrengthMetric(m.id)}
                     >
-                      <Text style={[styles.metricPillText, strengthMetric === m.id && styles.metricPillTextActive]}>
+                      <Text style={[styles.metricPillText, strengthMetric === m.id && styles.metricPillTextActive, strengthMetric === m.id && m.color === Colors.primary && { color: Colors.onPrimary }]}>
                         {m.label}
                       </Text>
                     </TouchableOpacity>
@@ -1302,7 +1302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
     backgroundColor: Colors.text,
   },
-  nowBtnText: { fontSize: 12, fontWeight: '700', color: Colors.background },
+  nowBtnText: { fontSize: 12, fontWeight: '700', color: Colors.onPrimary },
 
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6, paddingHorizontal: 4 },
   chartLabel: { fontSize: 11, color: Colors.gray, fontWeight: '500' },
@@ -1413,8 +1413,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, marginBottom: 12,
     paddingVertical: 8, paddingHorizontal: 14,
-    backgroundColor: 'rgba(88,216,219,0.08)',
-    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(88,216,219,0.2)',
+    backgroundColor: 'rgba(255,230,0,0.08)',
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,230,0,0.2)',
   },
   customRangeNavText: { fontSize: 13, fontWeight: '600', color: Colors.text },
 
@@ -1439,7 +1439,7 @@ const styles = StyleSheet.create({
     flex: 1, paddingVertical: 14, borderRadius: 12,
     backgroundColor: Colors.primary, alignItems: 'center',
   },
-  saveBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  saveBtnText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimary },
 });
 
 const CELL_SIZE = Math.floor((SCREEN_WIDTH - 48 - 32) / 7); // sheet padding 24*2 + inner padding 16*2
@@ -1472,11 +1472,11 @@ const pickerStyles = StyleSheet.create({
     borderRadius: CELL_SIZE / 2,
   },
   cellEmpty: { opacity: 0 },
-  cellInRange: { backgroundColor: 'rgba(88,216,219,0.15)', borderRadius: 0 },
+  cellInRange: { backgroundColor: 'rgba(255,230,0,0.15)', borderRadius: 0 },
   cellEndpoint: { backgroundColor: Colors.text, borderRadius: CELL_SIZE / 2 },
   cellText: { fontSize: 14, color: '#FFFFFF', fontWeight: '500' },
   cellInRangeText: { color: Colors.text, fontWeight: '600' },
-  cellEndpointText: { color: Colors.background, fontWeight: '700' },
+  cellEndpointText: { color: Colors.onPrimary, fontWeight: '700' },
 
   rangeSummary: {
     alignItems: 'center', marginBottom: 16,
@@ -1496,7 +1496,7 @@ const pickerStyles = StyleSheet.create({
     flex: 1, paddingVertical: 14, borderRadius: 12,
     backgroundColor: Colors.primary, alignItems: 'center',
   },
-  applyBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  applyBtnText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimary },
 });
 
 export default ProgressScreen;

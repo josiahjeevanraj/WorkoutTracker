@@ -1,34 +1,9 @@
 // Theme configurations for the Workout Tracking App
+import { Colors } from './colors';
+
 export const themes = {
-  default: {
-    name: 'Ocean Blue',
-    text: '#58d8db',        // Cyan/Turquoise
-    primary: '#283b89',     // Dark Blue
-    background: '#111928',  // Dark Navy
-
-    // Supporting colors
-    white: '#FFFFFF',
-    black: '#000000',
-    gray: '#6B7280',
-    lightGray: '#E5E7EB',
-    darkGray: '#374151',
-
-    // Status colors
-    success: '#10B981',
-    error: '#EF4444',
-    warning: '#F59E0B',
-    info: '#3B82F6',
-
-    // Component specific
-    cardBackground: '#1F2937',
-    modalBackground: 'rgba(17, 25, 40, 0.9)',
-    borderColor: '#374151',
-
-    // Chart colors
-    chartPrimary: '#283b89',
-    chartSecondary: '#58d8db',
-    chartAccent: '#10B981',
-  },
+  // Theme picker was removed; default mirrors the app palette in colors.js
+  default: { name: 'Default', ...Colors },
 
   sunset: {
     name: 'Sunset Orange',

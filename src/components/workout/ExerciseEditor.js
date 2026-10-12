@@ -23,8 +23,8 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
       onPress={() => { close(); onDuplicate(exKey, si); }}
       activeOpacity={0.85}
     >
-      <Ionicons name="copy-outline" size={16} color="#FFFFFF" />
-      <Text style={styles.swipeActionText}>Dup</Text>
+      <Ionicons name="copy-outline" size={16} color={Colors.onPrimary} />
+      <Text style={[styles.swipeActionText, { color: Colors.onPrimary }]}>Dup</Text>
     </TouchableOpacity>
   );
 

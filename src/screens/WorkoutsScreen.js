@@ -78,8 +78,8 @@ const SwipeableSessionCard = React.memo(({ item, cardRef, onPress, onDuplicate, 
       onPress={() => { close(); onDuplicate(item); }}
       activeOpacity={0.85}
     >
-      <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
-      <Text style={styles.swipeActionText}>Dup</Text>
+      <Ionicons name="copy-outline" size={18} color={Colors.onPrimary} />
+      <Text style={[styles.swipeActionText, { color: Colors.onPrimary }]}>Dup</Text>
     </TouchableOpacity>
   );
 
@@ -218,14 +218,14 @@ const WorkoutsScreen = () => {
             style={[styles.toggleBtn, activeView === 'calendar' && styles.toggleBtnActive]}
             onPress={() => setActiveView('calendar')}
           >
-            <Ionicons name="calendar-outline" size={15} color={activeView === 'calendar' ? '#FFFFFF' : Colors.gray} />
+            <Ionicons name="calendar-outline" size={15} color={activeView === 'calendar' ? Colors.onPrimary : Colors.gray} />
             <Text style={[styles.toggleBtnText, activeView === 'calendar' && styles.toggleBtnTextActive]}>Calendar</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggleBtn, activeView === 'list' && styles.toggleBtnActive]}
             onPress={() => setActiveView('list')}
           >
-            <Ionicons name="list-outline" size={15} color={activeView === 'list' ? '#FFFFFF' : Colors.gray} />
+            <Ionicons name="list-outline" size={15} color={activeView === 'list' ? Colors.onPrimary : Colors.gray} />
             <Text style={[styles.toggleBtnText, activeView === 'list' && styles.toggleBtnTextActive]}>List</Text>
           </TouchableOpacity>
         </View>
@@ -253,7 +253,7 @@ const WorkoutsScreen = () => {
 
           {/* FAB */}
           <TouchableOpacity style={styles.fab} onPress={() => setLogModalVisible(true)} activeOpacity={0.85}>
-            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Ionicons name="add-circle-outline" size={18} color={Colors.onPrimary} />
             <Text style={styles.fabText}>Log Workout</Text>
           </TouchableOpacity>
         </>
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   toggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   toggleBtnActive: { backgroundColor: Colors.primary },
   toggleBtnText: { fontSize: 13, fontWeight: '600', color: Colors.gray },
-  toggleBtnTextActive: { color: '#FFFFFF' },
+  toggleBtnTextActive: { color: Colors.onPrimary },
 
   // Summary bar
   summaryBar: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 16 },
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.45, shadowRadius: 16, elevation: 10,
   },
-  fabText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  fabText: { color: Colors.onPrimary, fontSize: 14, fontWeight: '700' },
 
   // Expansion animation
   expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },

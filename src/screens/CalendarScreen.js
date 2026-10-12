@@ -27,10 +27,10 @@ const buildGrid = (year, month) => {
 
 const heatColor = (level) => {
   switch (level) {
-    case 1: return 'rgba(88,216,219,0.18)';
-    case 2: return 'rgba(88,216,219,0.40)';
-    case 3: return 'rgba(88,216,219,0.65)';
-    case 4: return 'rgba(88,216,219,0.92)';
+    case 1: return 'rgba(255,230,0,0.18)';
+    case 2: return 'rgba(255,230,0,0.40)';
+    case 3: return 'rgba(255,230,0,0.65)';
+    case 4: return 'rgba(255,230,0,0.92)';
     default: return 'transparent';
   }
 };
@@ -69,8 +69,8 @@ const SwipeableCalSessionCard = React.memo(({ session, cardRef, onPress, onDupli
       onPress={() => { close(); onDuplicate(session); }}
       activeOpacity={0.85}
     >
-      <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
-      <Text style={s.swipeActionText}>Dup</Text>
+      <Ionicons name="copy-outline" size={18} color={Colors.onPrimary} />
+      <Text style={[s.swipeActionText, { color: Colors.onPrimary }]}>Dup</Text>
     </TouchableOpacity>
   );
 
@@ -425,7 +425,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
         {/* Log Workout button */}
         {onLogWorkout && (
           <TouchableOpacity style={s.logWorkoutBtn} onPress={() => onLogWorkout(selectedDate)} activeOpacity={0.8}>
-            <Ionicons name="add" size={16} color="#FFFFFF" />
+            <Ionicons name="add" size={16} color={Colors.onPrimary} />
             <Text style={s.logWorkoutBtnText}>Log Workout</Text>
           </TouchableOpacity>
         )}
@@ -700,14 +700,14 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
                       s.calCell,
                       { backgroundColor: isSelected ? 'transparent' : heatColor(intensity) },
                       isSelected && { borderWidth: 2, borderColor: Colors.text },
-                      isToday && !isSelected && { borderWidth: 1, borderColor: 'rgba(88,216,219,0.5)' },
+                      isToday && !isSelected && { borderWidth: 1, borderColor: 'rgba(255,230,0,0.5)' },
                     ]}
                     onPress={() => { setSelectedDate(dateKey); setIsEditing(false); }}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       s.calCellText,
-                      { color: intensity >= 3 && !isSelected ? '#0B1220' : isSelected ? Colors.text : Colors.textSecondary },
+                      { color: intensity >= 3 && !isSelected ? Colors.onPrimary : isSelected ? Colors.text : Colors.textSecondary },
                       (intensity >= 3 || isSelected) && { fontWeight: '700' },
                     ]}>
                       {day}
@@ -750,7 +750,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
             <ScrollView showsVerticalScrollIndicator={false}>
               {getYears().map(y => (
                 <TouchableOpacity key={y} style={[s.pickerOption, y === currentYear && { backgroundColor: Colors.primary }]} onPress={() => { setCurrentYear(y); setShowYearPicker(false); }}>
-                  <Text style={[s.pickerOptionText, { color: y === currentYear ? '#FFFFFF' : Colors.textSecondary }, y === currentYear && { fontWeight: 'bold' }]}>{y}</Text>
+                  <Text style={[s.pickerOptionText, { color: y === currentYear ? Colors.onPrimary : Colors.textSecondary }, y === currentYear && { fontWeight: 'bold' }]}>{y}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -768,7 +768,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
             <ScrollView showsVerticalScrollIndicator={false}>
               {MONTH_NAMES.map((m, idx) => (
                 <TouchableOpacity key={idx} style={[s.pickerOption, idx + 1 === currentMonth && { backgroundColor: Colors.primary }]} onPress={() => { setCurrentMonth(idx + 1); setShowMonthPicker(false); }}>
-                  <Text style={[s.pickerOptionText, { color: idx + 1 === currentMonth ? '#FFFFFF' : Colors.textSecondary }, idx + 1 === currentMonth && { fontWeight: 'bold' }]}>{m}</Text>
+                  <Text style={[s.pickerOptionText, { color: idx + 1 === currentMonth ? Colors.onPrimary : Colors.textSecondary }, idx + 1 === currentMonth && { fontWeight: 'bold' }]}>{m}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -867,7 +867,7 @@ const s = StyleSheet.create({
   addWorkoutPrompt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10, borderStyle: 'dashed' },
   addWorkoutText: { fontSize: 15, color: Colors.gray },
   saveButton: { backgroundColor: Colors.primary, padding: 15, borderRadius: 10, alignItems: 'center' },
-  saveButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  saveButtonText: { color: Colors.onPrimary, fontSize: 16, fontWeight: 'bold' },
   deleteButton: { backgroundColor: Colors.softRed, padding: 15, borderRadius: 10, alignItems: 'center' },
   deleteButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
 
@@ -894,7 +894,7 @@ const s = StyleSheet.create({
   modalSubtitle: { fontSize: 13, color: Colors.gray, marginTop: 8, marginBottom: 8 },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   presetBtn: { backgroundColor: Colors.background, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: Colors.borderColor },
-  presetBtnActive: { borderColor: Colors.text, backgroundColor: 'rgba(88,216,219,0.1)' },
+  presetBtnActive: { borderColor: Colors.text, backgroundColor: 'rgba(255,230,0,0.1)' },
   presetText: { fontSize: 13, color: Colors.gray },
   presetTextActive: { color: Colors.text, fontWeight: '700' },
   durationInputRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
@@ -939,7 +939,7 @@ const s = StyleSheet.create({
   noSessionsText: { fontSize: 14, color: Colors.gray, marginBottom: 4 },
 
   logWorkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
-  logWorkoutBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  logWorkoutBtnText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimary },
 
   pickerModal: { borderRadius: 18, padding: 20, width: '88%', maxHeight: '60%', borderWidth: 1 },
   pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },

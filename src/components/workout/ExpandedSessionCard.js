@@ -145,7 +145,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => 
               <Text style={styles.expandDeleteText}>Delete</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.expandEditBtn} onPress={handleEdit}>
-              <Ionicons name="pencil" size={18} color="#FFFFFF" />
+              <Ionicons name="pencil" size={18} color={Colors.onPrimary} />
               <Text style={styles.expandEditText}>Edit Workout</Text>
             </TouchableOpacity>
           </View>

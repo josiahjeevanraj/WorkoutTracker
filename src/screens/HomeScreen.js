@@ -158,7 +158,7 @@ const HomeScreen = () => {
 
           {/* Weight */}
           <View style={styles.promptRow}>
-            <View style={[styles.iconBg, { backgroundColor: 'rgba(88,216,219,0.12)' }]}>
+            <View style={[styles.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
               <Ionicons name="scale-outline" size={18} color={Colors.text} />
             </View>
             <View style={styles.promptText}>
@@ -209,7 +209,7 @@ const HomeScreen = () => {
                   activeOpacity={0.8}
                 >
                   {savingWeight
-                    ? <ActivityIndicator size="small" color={Colors.white} />
+                    ? <ActivityIndicator size="small" color={Colors.onPrimary} />
                     : <Text style={styles.actionBtnText}>Save</Text>}
                 </TouchableOpacity>
               </View>
@@ -227,7 +227,7 @@ const HomeScreen = () => {
               activeOpacity={0.8}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="add" size={20} color="#FFFFFF" />
+              <Ionicons name="add" size={20} color={Colors.onPrimary} />
             </TouchableOpacity>
           </View>
           {todaySessions.length === 0 ? (
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   weightInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editIconBtn: {
     width: 36, height: 36, borderRadius: 10,
-    backgroundColor: 'rgba(88,216,219,0.12)', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(255,230,0,0.12)', justifyContent: 'center', alignItems: 'center',
   },
   weightInput: {
     width: 64, paddingVertical: 8, paddingHorizontal: 10,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center',
   },
   actionBtnDisabled: { opacity: 0.4 },
-  actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
+  actionBtnText: { color: Colors.onPrimary, fontSize: 14, fontWeight: '700' },
 
   // Today's workouts
   addBtn: {

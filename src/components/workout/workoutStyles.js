@@ -32,7 +32,7 @@ export default StyleSheet.create({
   expandDeleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
   expandEditBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary },
-  expandEditText: { fontSize: 14, color: '#FFFFFF', fontWeight: '700' },
+  expandEditText: { fontSize: 14, color: Colors.onPrimary, fontWeight: '700' },
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   detailName: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', flex: 1, minWidth: 0, marginRight: 8 },
   detailNameInput: { borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: Colors.background, fontSize: 22, fontWeight: 'bold' },
@@ -95,5 +95,5 @@ export default StyleSheet.create({
   cancelBtn: { backgroundColor: Colors.darkGray },
   cancelBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
   saveBtn: { backgroundColor: Colors.primary },
-  saveBtnText: { color: Colors.white, fontWeight: '600', fontSize: 16 },
+  saveBtnText: { color: Colors.onPrimary, fontWeight: '600', fontSize: 16 },
 });

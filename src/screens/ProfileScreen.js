@@ -141,8 +141,8 @@ const ProfileScreen = () => {
   const pendingEmail = user?.new_email;
 
   const primarySettings = [
-    { icon: 'person-outline',  color: '#58D8DB', title: 'Edit Profile', sub: 'Name, email', onPress: openEditModal },
-    { icon: 'body-outline',    color: '#FBBF24', title: 'Units', sub: `${units.label} (${units.weight})`, onPress: () => setShowUnitsModal(true) },
+    { icon: 'person-outline',  color: colors.primary, title: 'Edit Profile', sub: 'Name, email', onPress: openEditModal },
+    { icon: 'body-outline',    color: colors.primary, title: 'Units', sub: `${units.label} (${units.weight})`, onPress: () => setShowUnitsModal(true) },
   ];
 
   return (
@@ -154,7 +154,7 @@ const ProfileScreen = () => {
       </View>
 
       {/* Hero card */}
-      <View style={[s.heroCard, { borderColor: 'rgba(88,216,219,0.2)' }]}>
+      <View style={[s.heroCard, { borderColor: 'rgba(255,230,0,0.2)' }]}>
         <View style={s.heroTop}>
           <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
             <View style={s.heroAvatar}>
@@ -168,7 +168,7 @@ const ProfileScreen = () => {
               )}
             </View>
             <View style={[s.avatarBadge, { borderColor: colors.background }]}>
-              <Ionicons name="camera" size={12} color="#FFFFFF" />
+              <Ionicons name="camera" size={12} color={colors.onPrimary} />
             </View>
           </TouchableOpacity>
           <View style={s.heroInfo}>
@@ -178,7 +178,7 @@ const ProfileScreen = () => {
             {avatarError ? <Text style={s.heroError}>{avatarError}</Text> : null}
           </View>
         </View>
-        <View style={[s.heroDivider, { borderColor: 'rgba(88,216,219,0.15)' }]} />
+        <View style={[s.heroDivider, { borderColor: 'rgba(255,230,0,0.15)' }]} />
         <TouchableOpacity style={s.heroStats} onPress={() => setShowPRModal(true)} activeOpacity={0.7}>
           <View style={s.heroStatItem}>
             <Text style={s.heroStatValue}>{prList.length}</Text>
@@ -253,7 +253,7 @@ const ProfileScreen = () => {
               disabled={saving}
               activeOpacity={0.8}
             >
-              {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={s.saveBtnText}>Save</Text>}
+              {saving ? <ActivityIndicator color={colors.onPrimary} /> : <Text style={[s.saveBtnText, { color: colors.onPrimary }]}>Save</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -332,16 +332,16 @@ const s = StyleSheet.create({
   heroCard: {
     marginHorizontal: 18, marginTop: 16, marginBottom: 14,
     padding: 18, borderRadius: 20,
-    backgroundColor: 'rgba(88,216,219,0.08)',
+    backgroundColor: 'rgba(255,230,0,0.08)',
     borderWidth: 1,
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   heroAvatar: {
     width: 64, height: 64, borderRadius: 999,
-    backgroundColor: '#283b89',
+    backgroundColor: '#FFE600',
     justifyContent: 'center', alignItems: 'center',
   },
-  heroAvatarText: { color: '#FFFFFF', fontSize: 22, fontWeight: '800' },
+  heroAvatarText: { color: '#0E0E0E', fontSize: 22, fontWeight: '800' },
   heroAvatarImg: { width: 64, height: 64, borderRadius: 999 },
   heroAvatarOverlay: {
     ...StyleSheet.absoluteFillObject, borderRadius: 999,
@@ -350,7 +350,7 @@ const s = StyleSheet.create({
   avatarBadge: {
     position: 'absolute', right: -2, bottom: -2,
     width: 24, height: 24, borderRadius: 999, borderWidth: 2,
-    backgroundColor: '#283b89', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#FFE600', justifyContent: 'center', alignItems: 'center',
   },
   heroInfo: { flex: 1 },
   heroName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },

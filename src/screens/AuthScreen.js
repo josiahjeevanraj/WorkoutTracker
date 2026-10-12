@@ -93,7 +93,7 @@ const AuthScreen = () => {
 
         <TouchableOpacity style={s.submitBtn} onPress={submit} disabled={loading} activeOpacity={0.85}>
           {loading
-            ? <ActivityIndicator color="#FFFFFF" />
+            ? <ActivityIndicator color={Colors.onPrimary} />
             : <Text style={s.submitText}>{isSignUp ? 'Sign up' : 'Sign in'}</Text>}
         </TouchableOpacity>
 
@@ -134,7 +134,7 @@ const s = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 12,
     paddingVertical: 14, alignItems: 'center', marginTop: 8,
   },
-  submitText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
+  submitText: { fontSize: 15, fontWeight: '700', color: Colors.onPrimary },
 
   linkBtn: { marginTop: 18, alignItems: 'center' },
   linkText: { fontSize: 13, color: Colors.text, fontWeight: '600' },
