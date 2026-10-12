@@ -8,6 +8,7 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
+import { weightUnit, kgToDisplay, displayToKg } from '../utils/units';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -132,8 +133,9 @@ const HomeScreen = ({ navigation }) => {
   }, []));
 
   const saveWeight = async () => {
-    const weight = parseFloat(weightInput);
-    if (!(weight > 0)) return;
+    const entered = parseFloat(weightInput);
+    if (!(entered > 0)) return;
+    const weight = displayToKg(entered, units);
     Keyboard.dismiss();
     setSavingWeight(true);
     const key = toKey(new Date());
@@ -157,6 +159,9 @@ const HomeScreen = ({ navigation }) => {
   const today = new Date();
   const todayKey = toKey(today);
   const firstName = profile?.name ? profile.name.split(' ')[0] : 'there';
+  const units = profile?.units;
+  const unit = weightUnit(units);
+  const w = kg => fmtNum(kgToDisplay(kg, units)); // kg value -> display string
 
   // Weight
   const weightSeries = getWeightSeries(fitnessData);
@@ -215,9 +220,9 @@ const HomeScreen = ({ navigation }) => {
             <Text style={styles.promptTitle}>Weight</Text>
             <Text style={styles.promptSub}>
               {weightLoggedToday
-                ? `${fmtNum(latestWeight.weight)} kg logged today`
+                ? `${w(latestWeight.weight)} ${unit} logged today`
                 : latestWeight
-                  ? `Last: ${fmtNum(latestWeight.weight)} kg, ${fmtAgo(latestWeight.date, todayKey)}`
+                  ? `Last: ${w(latestWeight.weight)} ${unit}, ${fmtAgo(latestWeight.date, todayKey)}`
                   : 'No weight logged yet'}
             </Text>
           </View>
@@ -229,7 +234,7 @@ const HomeScreen = ({ navigation }) => {
                 style={styles.weightInput}
                 value={weightInput}
                 onChangeText={setWeightInput}
-                placeholder={latestWeight ? fmtNum(latestWeight.weight) : 'kg'}
+                placeholder={latestWeight ? w(latestWeight.weight) : unit}
                 placeholderTextColor={Colors.gray}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
@@ -282,18 +287,18 @@ const HomeScreen = ({ navigation }) => {
           <Text style={styles.cardLabel}>WEIGHT · LAST {WEIGHT_WINDOW_DAYS} DAYS</Text>
           {weightChange != null && (
             <Text style={[styles.deltaText, { color: weightChange <= 0 ? Colors.green : Colors.amber }]}>
-              {fmtDelta(weightChange)} kg
+              {fmtDelta(kgToDisplay(weightChange, units))} {unit}
             </Text>
           )}
         </View>
         {latestWeight ? (
           <>
             <View style={styles.bigValueRow}>
-              <Text style={styles.bigValue}>{fmtNum(latestWeight.weight)}</Text>
-              <Text style={styles.bigUnit}> kg</Text>
+              <Text style={styles.bigValue}>{w(latestWeight.weight)}</Text>
+              <Text style={styles.bigUnit}> {unit}</Text>
               {goalWeight != null && (
                 <Text style={styles.goalText}>
-                  Goal {fmtNum(goalWeight)} kg · {fmtNum(Math.abs(Math.round((latestWeight.weight - goalWeight) * 10) / 10))} to go
+                  Goal {w(goalWeight)} {unit} · {w(Math.abs(latestWeight.weight - goalWeight))} to go
                 </Text>
               )}
             </View>
@@ -336,10 +341,10 @@ const HomeScreen = ({ navigation }) => {
                 <View style={styles.liftInfo}>
                   <Text style={styles.liftName} numberOfLines={1}>{lift.name}</Text>
                   <Text style={styles.liftMeta}>
-                    {fmtNum(latest)} kg
+                    {w(latest)} {unit}
                     {lift.points.length >= 2 && (
                       <Text style={{ color: change > 0 ? Colors.green : change < 0 ? Colors.softRed : Colors.gray }}>
-                        {'  '}{fmtDelta(change)} kg
+                        {'  '}{fmtDelta(kgToDisplay(change, units))} {unit}
                       </Text>
                     )}
                   </Text>

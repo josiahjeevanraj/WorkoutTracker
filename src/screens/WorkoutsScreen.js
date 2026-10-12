@@ -13,6 +13,7 @@ import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import CalendarScreen from './CalendarScreen';
 import { EXERCISE_LIST } from '../constants/exercises';
+import { weightUnit } from '../utils/units';
 
 // Categories match the "category" column in strength_exercises.csv
 const WORKOUT_CATEGORIES = [
@@ -249,7 +250,12 @@ const WorkoutsScreen = ({ route, navigation }) => {
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
 
-  useFocusEffect(useCallback(() => { loadHistory().catch(console.error); }, []));
+  const [defaultUnit, setDefaultUnit] = useState('kg');
+
+  useFocusEffect(useCallback(() => {
+    loadHistory().catch(console.error);
+    StorageService.getUserProfile().then(p => setDefaultUnit(weightUnit(p?.units))).catch(console.error);
+  }, []));
 
   // Home screen's "Log workout" prompt navigates here with openLog set
   useEffect(() => {
@@ -363,7 +369,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
   const removeExercise = (key) =>
     setEditedSession(prev => ({ ...prev, exercises: prev.exercises.filter(ex => ex._key !== key) }));
   const addExercise = () =>
-    setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: [{ reps: '', weight: '', warmup: false }], _key: Date.now().toString() }] }));
+    setEditedSession(prev => ({ ...prev, exercises: [...prev.exercises, { name: '', sets: [{ reps: '', weight: '', warmup: false, unit: defaultUnit }], _key: Date.now().toString() }] }));
 
   // ── Inline set helpers (used in both log and edit flows) ──────────────────
   const updateSet = (exKey, setIdx, field, value, context) => {
@@ -380,7 +386,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
   const addSet = (exKey, context) => {
     const updater = exercises => exercises.map(ex =>
       ex._key === exKey
-        ? { ...ex, sets: [...ex.sets, { weight: ex.sets[ex.sets.length - 1]?.weight || '', reps: '', warmup: false }] }
+        ? { ...ex, sets: [...ex.sets, { weight: ex.sets[ex.sets.length - 1]?.weight || '', reps: '', warmup: false, unit: ex.sets[ex.sets.length - 1]?.unit || defaultUnit }] }
         : ex
     );
     context === 'log'
@@ -410,7 +416,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
 
   const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); setLogTargetDate(null); };
   const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
-  const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '', warmup: false }], _key: Date.now().toString() }]);
+  const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '', warmup: false, unit: defaultUnit }], _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeLogExercise = (key) => setLogExercises(prev => prev.filter(ex => ex._key !== key));
 
