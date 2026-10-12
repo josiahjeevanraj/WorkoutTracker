@@ -17,9 +17,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_INNER_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
 
 const WEIGHT_WINDOW_DAYS = 30;
-const LIFT_WINDOW_DAYS = 90;
-const TOP_LIFTS = 3;
-const LBS_TO_KG = 0.453592;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -58,29 +55,6 @@ function getWeightSeries(fitnessData) {
     .filter(([, v]) => v && parseFloat(v.weight) > 0)
     .map(([date, v]) => ({ date, weight: parseFloat(v.weight) }))
     .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-// Heaviest working set (warmups excluded) per session for the most-logged lifts
-function getLiftProgress(history) {
-  const cutoff = daysAgoKey(LIFT_WINDOW_DAYS);
-  const byLift = {};
-  history.forEach(session => {
-    const date = toKey(new Date(session.completedAt));
-    if (date < cutoff) return;
-    (session.exercises || []).forEach(ex => {
-      const max = (ex.sets || []).reduce((m, set) => {
-        if (set.warmup) return m;
-        const w = parseFloat(set.weight) || 0;
-        return Math.max(m, set.unit === 'lbs' ? w * LBS_TO_KG : w);
-      }, 0);
-      if (max <= 0) return;
-      (byLift[ex.name] = byLift[ex.name] || []).push({ date, value: Math.round(max * 10) / 10 });
-    });
-  });
-  return Object.entries(byLift)
-    .map(([name, points]) => ({ name, points: points.sort((a, b) => a.date.localeCompare(b.date)) }))
-    .sort((a, b) => b.points.length - a.points.length)
-    .slice(0, TOP_LIFTS);
 }
 
 // ─── Line chart ───────────────────────────────────────────────────────────────
@@ -173,15 +147,10 @@ const HomeScreen = ({ navigation }) => {
     : null;
   const goalWeight = profile?.goalWeight || null;
 
-  // Workouts
-  const lastSessionKey = history.reduce((latest, s) => {
-    const k = toKey(new Date(s.completedAt));
-    return !latest || k > latest ? k : latest;
-  }, null);
-  const workedOutToday = lastSessionKey === todayKey;
-
-  // Lifts
-  const lifts = getLiftProgress(history);
+  // Today's workouts
+  const todaySessions = history
+    .filter(s => toKey(new Date(s.completedAt)) === todayKey)
+    .sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 
   if (loading) {
     return (
@@ -253,32 +222,43 @@ const HomeScreen = ({ navigation }) => {
             </View>
           )}
         </View>
+      </View>
 
-        <View style={styles.divider} />
-
-        {/* Workout */}
-        <View style={styles.promptRow}>
-          <View style={[styles.iconBg, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-            <Ionicons name="barbell-outline" size={18} color={Colors.indigo} />
-          </View>
-          <View style={styles.promptText}>
-            <Text style={styles.promptTitle}>Workout</Text>
-            <Text style={styles.promptSub}>
-              {lastSessionKey ? `Last session ${fmtAgo(lastSessionKey, todayKey)}` : 'No workouts logged yet'}
-            </Text>
-          </View>
-          {workedOutToday ? (
-            <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
-          ) : (
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => navigation.navigate('Workouts', { openLog: Date.now() })}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.actionBtnText}>Log</Text>
-            </TouchableOpacity>
-          )}
+      {/* Today's workouts */}
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardLabel}>TODAY'S WORKOUTS</Text>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => navigation.navigate('Workouts', { openLog: Date.now() })}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
+        {todaySessions.length === 0 ? (
+          <Text style={styles.emptyText}>No workouts logged today.</Text>
+        ) : (
+          todaySessions.map((session, i) => {
+            const exercises = session.exercises || [];
+            const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
+            return (
+              <View key={session.id} style={[styles.sessionRow, i > 0 && styles.sessionRowBorder]}>
+                <View style={[styles.iconBg, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
+                  <Ionicons name="barbell-outline" size={18} color={Colors.indigo} />
+                </View>
+                <View style={styles.promptText}>
+                  <Text style={styles.promptTitle} numberOfLines={1}>{session.name}</Text>
+                  <Text style={styles.promptSub} numberOfLines={1}>
+                    {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} · {setCount} set{setCount !== 1 ? 's' : ''}
+                    {exercises.length ? ` · ${exercises.map(ex => ex.name).join(', ')}` : ''}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
       </View>
 
       {/* Weight progression */}
@@ -326,42 +306,6 @@ const HomeScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* Lift progression */}
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>LIFTS · LAST {LIFT_WINDOW_DAYS} DAYS</Text>
-        {lifts.length === 0 ? (
-          <Text style={styles.emptyText}>Log weighted workouts to see your lift progression.</Text>
-        ) : (
-          lifts.map((lift, i) => {
-            const first = lift.points[0].value;
-            const latest = lift.points[lift.points.length - 1].value;
-            const change = latest - first;
-            return (
-              <View key={lift.name} style={[styles.liftRow, i > 0 && styles.liftRowBorder]}>
-                <View style={styles.liftInfo}>
-                  <Text style={styles.liftName} numberOfLines={1}>{lift.name}</Text>
-                  <Text style={styles.liftMeta}>
-                    {w(latest)} {unit}
-                    {lift.points.length >= 2 && (
-                      <Text style={{ color: change > 0 ? Colors.green : change < 0 ? Colors.softRed : Colors.gray }}>
-                        {'  '}{fmtDelta(kgToDisplay(change, units))} {unit}
-                      </Text>
-                    )}
-                  </Text>
-                </View>
-                <LineChart
-                  values={lift.points.map(p => p.value)}
-                  width={110}
-                  height={36}
-                  color={Colors.indigo}
-                  strokeWidth={1.5}
-                />
-              </View>
-            );
-          })
-        )}
-      </View>
-
     </ScrollView>
   );
 };
@@ -383,7 +327,6 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardLabel: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 1 },
   emptyText: { fontSize: 13, color: Colors.gray, marginTop: 12 },
-  divider:   { height: 1, backgroundColor: Colors.borderColor, marginVertical: 12 },
 
   // Prompt rows
   promptRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
@@ -414,12 +357,13 @@ const styles = StyleSheet.create({
   chartAxis:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   axisLabel:   { fontSize: 10, color: Colors.gray, fontWeight: '500' },
 
-  // Lift progression
-  liftRow:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, gap: 12 },
-  liftRowBorder: { borderTopWidth: 1, borderTopColor: Colors.borderColor },
-  liftInfo:      { flex: 1 },
-  liftName:      { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-  liftMeta:      { fontSize: 13, color: Colors.textSecondary, marginTop: 2 },
+  // Today's workouts
+  addBtn: {
+    width: 30, height: 30, borderRadius: 999,
+    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
+  },
+  sessionRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12 },
+  sessionRowBorder: { borderTopWidth: 1, borderTopColor: Colors.borderColor, marginTop: 12 },
 });
 
 export default HomeScreen;

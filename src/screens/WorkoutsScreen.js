@@ -15,30 +15,6 @@ import CalendarScreen from './CalendarScreen';
 import { EXERCISE_LIST } from '../constants/exercises';
 import { weightUnit } from '../utils/units';
 
-// Categories match the "category" column in strength_exercises.csv
-const WORKOUT_CATEGORIES = [
-  {
-    id: 'weighted',
-    label: 'Weighted',
-    icon: 'barbell-outline',
-    workouts: [
-      'Chest Day', 'Back Day', 'Shoulder Day', 'Arm Day', 'Leg Day',
-      'Push Day', 'Pull Day', 'Legs & Glutes', 'Full Body', 'Deadlift Day',
-      'Squat Focus', 'Glute Focus', 'Hamstring Focus', 'Core & Abs',
-    ],
-  },
-  {
-    id: 'calisthenics',
-    label: 'Calisthenics',
-    icon: 'body-outline',
-    workouts: [
-      'Push Circuit', 'Pull Circuit', 'Leg Circuit', 'Core Circuit',
-      'Upper Body Circuit', 'Full Body Calisthenics', 'Ab Workout',
-      'Chest & Triceps Circuit', 'Back & Biceps Circuit',
-    ],
-  },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const formatDayLabel = (dateString) => {
@@ -234,7 +210,6 @@ const WorkoutsScreen = ({ route, navigation }) => {
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [selectedSession, setSelectedSession] = useState(null); // edit modal only
   const [logModalVisible, setLogModalVisible] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedWorkout, setSelectedWorkout] = useState('');
   const [logExercises, setLogExercises] = useState([]);
   const [logNotes, setLogNotes] = useState('');
@@ -414,14 +389,12 @@ const WorkoutsScreen = ({ route, navigation }) => {
       : setEditedSession(prev => ({ ...prev, exercises: updater(prev.exercises) }));
   };
 
-  const closeLogModal = () => { setLogModalVisible(false); setSelectedCategory(null); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); setLogTargetDate(null); };
-  const handleCategorySelect = (cat) => { setSelectedCategory(cat); setSelectedWorkout(cat.label); setLogExercises([]); };
+  const closeLogModal = () => { setLogModalVisible(false); setSelectedWorkout(''); setLogExercises([]); setLogNotes(''); setLogTargetDate(null); };
   const addLogExercise = () => setLogExercises(prev => [...prev, { name: '', sets: [{ reps: '', weight: '', warmup: false, unit: defaultUnit }], _key: Date.now().toString() }]);
   const updateLogExercise = (key, field, value) => setLogExercises(prev => prev.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeLogExercise = (key) => setLogExercises(prev => prev.filter(ex => ex._key !== key));
 
   const handleLogWorkout = async () => {
-    if (!selectedWorkout) { Alert.alert('Select a workout', 'Please choose a category and workout first'); return; }
     const namedExercises = logExercises.filter(ex => ex.name.trim());
     if (!namedExercises.length) { Alert.alert('No exercises', 'Please add at least one exercise before saving.'); return; }
     const hasEmptyReps = namedExercises.some(ex => ex.sets.some(s => !String(s.reps).trim()));
@@ -433,7 +406,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
     const completedAt = logTargetDate
       ? new Date(logTargetDate + 'T12:00:00').toISOString()
       : new Date().toISOString();
-    await StorageService.addWorkoutSession({ name: selectedWorkout, duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: logNotes.trim(), completedAt });
+    await StorageService.addWorkoutSession({ name: selectedWorkout.trim() || 'Workout', duration: 0, exerciseCount: cleanExercises.length, caloriesBurned: 0, exercises: cleanExercises, notes: logNotes.trim(), completedAt });
     await loadHistory();
     closeLogModal();
   };
@@ -739,94 +712,75 @@ const WorkoutsScreen = ({ route, navigation }) => {
             <Text style={styles.modalTitle}>Log Workout</Text>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-              <Text style={styles.logSectionLabel}>Category</Text>
-              <View style={styles.categoryGrid}>
-                {WORKOUT_CATEGORIES.map(cat => (
+              <Text style={styles.logSectionLabel}>Session Name</Text>
+              <TextInput
+                style={styles.sessionNameInput}
+                value={selectedWorkout}
+                onChangeText={setSelectedWorkout}
+                placeholder="e.g. Chest Day, Leg Day..."
+                placeholderTextColor={Colors.gray}
+              />
+
+              <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
+              {logExercises.map(ex => (
+                <View key={ex._key} style={styles.editExerciseBlock}>
                   <TouchableOpacity
-                    key={cat.id}
-                    style={[styles.categoryChip, selectedCategory?.id === cat.id && styles.categoryChipActive]}
-                    onPress={() => handleCategorySelect(cat)}
+                    style={styles.exPickerRow}
+                    onPress={() => { setInlinePickerKey(inlinePickerKey === ex._key ? null : ex._key); setInlinePickerSearch(''); }}
                     activeOpacity={0.7}
                   >
-                    <Ionicons name={cat.icon} size={18} color={selectedCategory?.id === cat.id ? Colors.white : Colors.text} />
-                    <Text style={[styles.categoryChipText, selectedCategory?.id === cat.id && styles.categoryChipTextActive]}>{cat.label}</Text>
+                    <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
+                    <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
+                      {ex.name || 'Select exercise'}
+                    </Text>
+                    <Ionicons name={inlinePickerKey === ex._key ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
+                    <TouchableOpacity onPress={() => removeLogExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={20} color={Colors.error} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
-                ))}
-              </View>
-
-              {selectedCategory && (
-                <>
-                  <Text style={[styles.logSectionLabel, { marginTop: 4 }]}>Session Name</Text>
-                  <TextInput
-                    style={styles.sessionNameInput}
-                    value={selectedWorkout}
-                    onChangeText={setSelectedWorkout}
-                    placeholder="e.g. Chest Day, Leg Day..."
-                    placeholderTextColor={Colors.gray}
-                  />
-
-                  <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-                  {logExercises.map(ex => (
-                    <View key={ex._key} style={styles.editExerciseBlock}>
-                      <TouchableOpacity
-                        style={styles.exPickerRow}
-                        onPress={() => { setInlinePickerKey(inlinePickerKey === ex._key ? null : ex._key); setInlinePickerSearch(''); }}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="barbell-outline" size={16} color={ex.name ? Colors.text : Colors.gray} />
-                        <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
-                          {ex.name || 'Select exercise'}
-                        </Text>
-                        <Ionicons name={inlinePickerKey === ex._key ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
-                        <TouchableOpacity onPress={() => removeLogExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                          <Ionicons name="close-circle" size={20} color={Colors.error} />
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                      {inlinePickerKey === ex._key && (
-                        <View style={styles.inlinePicker}>
-                          <View style={styles.inlineSearchRow}>
-                            <Ionicons name="search-outline" size={16} color={Colors.gray} />
-                            <TextInput
-                              style={styles.inlineSearchInput}
-                              value={inlinePickerSearch}
-                              onChangeText={setInlinePickerSearch}
-                              placeholder="Search exercises..."
-                              placeholderTextColor={Colors.gray}
-                            />
-                            {inlinePickerSearch.length > 0 && (
-                              <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
-                                <Ionicons name="close-circle" size={16} color={Colors.gray} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                          <ScrollView style={styles.inlinePickerList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
-                            {(inlinePickerSearch.trim()
-                              ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(inlinePickerSearch.toLowerCase()))
-                              : EXERCISE_LIST
-                            ).map(name => (
-                              <TouchableOpacity
-                                key={name}
-                                style={styles.inlinePickerItem}
-                                onPress={() => {
-                                  updateLogExercise(ex._key, 'name', name);
-                                  setInlinePickerKey(null);
-                                }}
-                              >
-                                <Text style={styles.inlinePickerItemText}>{name}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      )}
-                      {renderInlineSets(ex, 'log')}
+                  {inlinePickerKey === ex._key && (
+                    <View style={styles.inlinePicker}>
+                      <View style={styles.inlineSearchRow}>
+                        <Ionicons name="search-outline" size={16} color={Colors.gray} />
+                        <TextInput
+                          style={styles.inlineSearchInput}
+                          value={inlinePickerSearch}
+                          onChangeText={setInlinePickerSearch}
+                          placeholder="Search exercises..."
+                          placeholderTextColor={Colors.gray}
+                        />
+                        {inlinePickerSearch.length > 0 && (
+                          <TouchableOpacity onPress={() => setInlinePickerSearch('')}>
+                            <Ionicons name="close-circle" size={16} color={Colors.gray} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <ScrollView style={styles.inlinePickerList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                        {(inlinePickerSearch.trim()
+                          ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(inlinePickerSearch.toLowerCase()))
+                          : EXERCISE_LIST
+                        ).map(name => (
+                          <TouchableOpacity
+                            key={name}
+                            style={styles.inlinePickerItem}
+                            onPress={() => {
+                              updateLogExercise(ex._key, 'name', name);
+                              setInlinePickerKey(null);
+                            }}
+                          >
+                            <Text style={styles.inlinePickerItemText}>{name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
-                  ))}
-                  <TouchableOpacity style={styles.addExerciseBtn} onPress={addLogExercise}>
-                    <Ionicons name="add-circle-outline" size={20} color={Colors.text} />
-                    <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
-                  </TouchableOpacity>
-                </>
-              )}
+                  )}
+                  {renderInlineSets(ex, 'log')}
+                </View>
+              ))}
+              <TouchableOpacity style={styles.addExerciseBtn} onPress={addLogExercise}>
+                <Ionicons name="add-circle-outline" size={20} color={Colors.text} />
+                <Text style={styles.addExerciseBtnText}>Add Exercise</Text>
+              </TouchableOpacity>
 
               <View style={styles.logNotesGroup}>
                 <Text style={styles.logSectionLabel}>Notes</Text>
@@ -846,7 +800,7 @@ const WorkoutsScreen = ({ route, navigation }) => {
                 <TouchableOpacity style={[styles.modalButton, styles.cancelBtn]} onPress={closeLogModal}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalButton, styles.saveBtn, !selectedWorkout && styles.saveBtnDisabled]} onPress={handleLogWorkout}>
+                <TouchableOpacity style={[styles.modalButton, styles.saveBtn]} onPress={handleLogWorkout}>
                   <Text style={styles.saveBtnText}>Log</Text>
                 </TouchableOpacity>
               </View>
@@ -1047,11 +1001,6 @@ const styles = StyleSheet.create({
   sessionSwipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 72, borderRadius: 14, marginBottom: 10, gap: 4 },
 
   logSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
-  categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  categoryChip: { width: '47%', flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderRadius: 10, backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.borderColor },
-  categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  categoryChipText: { color: Colors.text, fontSize: 14, fontWeight: '500' },
-  categoryChipTextActive: { color: Colors.white },
 
   logNotesGroup: { marginTop: 20 },
   logNotesInput: {
@@ -1080,7 +1029,6 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
   saveBtn: { backgroundColor: Colors.primary },
   saveBtnText: { color: Colors.white, fontWeight: '600', fontSize: 16 },
-  saveBtnDisabled: { opacity: 0.4 },
 });
 
 export default WorkoutsScreen;
