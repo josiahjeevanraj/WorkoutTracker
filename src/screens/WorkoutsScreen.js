@@ -279,6 +279,7 @@ const WorkoutsScreen = () => {
             setHistory(prev => prev.map(s => s.id === updated.id ? { ...s, notes: updated.notes } : s));
           }}
           onEdit={setEditingSession}
+          onCopied={loadHistory}
           onDeleted={id => {
             setExpandedCard(null);
             setHistory(prev => prev.filter(s => s.id !== id));

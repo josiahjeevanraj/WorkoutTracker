@@ -287,6 +287,7 @@ const HomeScreen = () => {
             setHistory(prev => prev.map(s => s.id === updated.id ? { ...s, notes: updated.notes } : s));
           }}
           onEdit={setEditingSession}
+          onCopied={reloadHistory}
           onDeleted={id => {
             setExpandedCard(null);
             setHistory(prev => prev.filter(s => s.id !== id));

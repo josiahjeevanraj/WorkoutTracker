@@ -31,6 +31,7 @@ export default StyleSheet.create({
   expandActions: { flexDirection: 'row', gap: 12, padding: 20, paddingBottom: 40, borderTopWidth: 1, borderTopColor: Colors.borderColor },
   expandDeleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
   expandDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
+  expandCopyText: { fontSize: 14, color: Colors.text, fontWeight: '600' },
   expandEditBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary },
   expandEditText: { fontSize: 14, color: Colors.onPrimary, fontWeight: '700' },
   detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

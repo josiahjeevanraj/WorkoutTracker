@@ -735,6 +735,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
           rect={expandedCard.rect}
           onClosed={() => { setExpandedCard(null); onSessionDeleted?.(); }}
           onEdit={session => { setExpandedCard(null); onEditSession?.(session); }}
+          onCopied={() => onSessionDeleted?.()}
           onDeleted={() => { setExpandedCard(null); onSessionDeleted?.(); }}
         />
       )}

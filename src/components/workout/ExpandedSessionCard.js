@@ -6,18 +6,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
+import showAlert from '../../utils/showAlert';
+import DayPicker from './DayPicker';
 import styles from './workoutStyles';
+
+const toKey = d =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 const formatTime = iso =>
   new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
 // Full-screen hero that grows out of the tapped card. Rendered in a Modal so it
 // fills the window regardless of the parent's layout (rect: page position from measure()).
-const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => {
+const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCopied }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const anim = useRef(new Animated.Value(0)).current;
   const [notes, setNotes] = useState(session.notes || '');
   const notesRef = useRef(session.notes || '');
+  const [copyPickerOpen, setCopyPickerOpen] = useState(false);
+  const copyingRef = useRef(false);
 
   useEffect(() => {
     Animated.spring(anim, { toValue: 1, useNativeDriver: false, tension: 55, friction: 11 }).start();
@@ -43,6 +50,23 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => 
     const updated = { ...session, notes: latest };
     onClosed?.(updated);
     onEdit?.(updated);
+  };
+
+  // Copy to another day, keeping the original time of day
+  const handleCopy = async dateKey => {
+    if (copyingRef.current) return;
+    copyingRef.current = true;
+    setCopyPickerOpen(false);
+    const { id, ...rest } = session;
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const completedAt = new Date(session.completedAt);
+    completedAt.setFullYear(y, m - 1, d);
+    const copy = await StorageService.addWorkoutSession({ ...rest, notes: notesRef.current, completedAt: completedAt.toISOString() });
+    copyingRef.current = false;
+    if (!copy) { showAlert('Could not copy', 'The workout was not copied. Please try again.'); return; }
+    onCopied?.(copy);
+    const label = completedAt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    showAlert('Workout copied', `${session.name} was copied to ${label}.`);
   };
 
   const handleDelete = () => {
@@ -144,13 +168,26 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => 
               <Ionicons name="trash-outline" size={18} color={Colors.softRed} />
               <Text style={styles.expandDeleteText}>Delete</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.expandDeleteBtn} onPress={() => setCopyPickerOpen(true)}>
+              <Ionicons name="copy-outline" size={18} color={Colors.text} />
+              <Text style={styles.expandCopyText}>Copy</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.expandEditBtn} onPress={handleEdit}>
               <Ionicons name="pencil" size={18} color={Colors.onPrimary} />
-              <Text style={styles.expandEditText}>Edit Workout</Text>
+              <Text style={styles.expandEditText}>Edit</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
       </Animated.View>
+
+      {copyPickerOpen && (
+        <DayPicker
+          title="Copy to day"
+          markedKey={toKey(new Date(session.completedAt))}
+          onSelect={handleCopy}
+          onCancel={() => setCopyPickerOpen(false)}
+        />
+      )}
     </Modal>
   );
 };
