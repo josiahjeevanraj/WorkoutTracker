@@ -144,9 +144,9 @@ const HomeScreen = () => {
   const priorWeight = getWeightSeries(fitnessData).filter(e => e.date < selectedKey).pop() || null;
   const isToday = selectedKey === todayKey;
 
-  // Today's workouts
-  const todaySessions = history
-    .filter(s => toKey(new Date(s.completedAt)) === todayKey)
+  // Workouts on the selected day
+  const daySessions = history
+    .filter(s => toKey(new Date(s.completedAt)) === selectedKey)
     .sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 
   if (loading) {
@@ -174,23 +174,20 @@ const HomeScreen = () => {
           <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
         </View>
 
-        {/* Daily log: weight + meals for the selected day */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardLabel}>DAILY LOG</Text>
-            <View style={styles.dayNav}>
-              <TouchableOpacity onPress={() => changeDay(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="chevron-back" size={18} color={Colors.text} />
-              </TouchableOpacity>
-              <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
-              <TouchableOpacity onPress={() => changeDay(1)} disabled={isToday} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : Colors.text} />
-              </TouchableOpacity>
-            </View>
-          </View>
+        {/* Day switcher: weight, meals and workouts below follow the selected day */}
+        <View style={styles.dayNav}>
+          <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-back" size={18} color={Colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
+          <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(1)} disabled={isToday} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : Colors.text} />
+          </TouchableOpacity>
+        </View>
 
-          {/* Weight */}
-          <View style={styles.promptRow}>
+        {/* Weight */}
+        <View style={styles.card}>
+          <View style={[styles.promptRow, { marginTop: 0 }]}>
             <View style={[styles.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
               <Ionicons name="scale-outline" size={18} color={Colors.text} />
             </View>
@@ -249,8 +246,10 @@ const HomeScreen = () => {
             )}
           </View>
 
-          <View style={styles.divider} />
+        </View>
 
+        {/* Meals */}
+        <View style={styles.card}>
           <MealLog
             dayKey={selectedKey}
             dayData={fitnessData[selectedKey]}
@@ -258,10 +257,10 @@ const HomeScreen = () => {
           />
         </View>
 
-        {/* Today's workouts */}
+        {/* Workouts for the selected day */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardLabel}>TODAY'S WORKOUTS</Text>
+            <Text style={styles.cardLabel}>{isToday ? "TODAY'S WORKOUTS" : 'WORKOUTS'}</Text>
             <TouchableOpacity
               style={styles.addBtn}
               onPress={() => setLogModalVisible(true)}
@@ -271,10 +270,10 @@ const HomeScreen = () => {
               <Ionicons name="add" size={20} color={Colors.onPrimary} />
             </TouchableOpacity>
           </View>
-          {todaySessions.length === 0 ? (
-            <Text style={styles.emptyText}>No workouts logged today.</Text>
+          {daySessions.length === 0 ? (
+            <Text style={styles.emptyText}>No workouts logged {isToday ? 'today' : 'on this day'}.</Text>
           ) : (
-            todaySessions.map((session, i) => {
+            daySessions.map((session, i) => {
               const exercises = session.exercises || [];
               const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
               return (
@@ -308,6 +307,7 @@ const HomeScreen = () => {
         visible={logModalVisible}
         onClose={() => setLogModalVisible(false)}
         onSaved={reloadHistory}
+        targetDate={isToday ? null : selectedKey}
         defaultUnit={unit}
       />
 
@@ -356,9 +356,13 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardLabel: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 1 },
   emptyText: { fontSize: 13, color: Colors.gray, marginTop: 12 },
-  divider:   { height: 1, backgroundColor: Colors.borderColor, marginVertical: 16 },
-  dayNav:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dayNavLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', minWidth: 88, textAlign: 'center' },
+  dayNav: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginHorizontal: 18, marginTop: 8, paddingVertical: 6, paddingHorizontal: 8,
+    backgroundColor: Colors.cardBackground, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  dayNavBtn:   { padding: 6 },
+  dayNavLabel: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 
   // Prompt rows
   promptRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },

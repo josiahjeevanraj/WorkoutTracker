@@ -12,9 +12,7 @@ import showAlert from '../utils/showAlert';
 const newMeal = index => ({ id: `${Date.now()}-${index}`, name: `Meal ${index + 1}`, calories: '', protein: '' });
 
 const toDraft = meals =>
-  meals?.length
-    ? meals.map(m => ({ ...m, calories: m.calories ? String(m.calories) : '', protein: m.protein ? String(m.protein) : '' }))
-    : [newMeal(0)];
+  (meals || []).map(m => ({ ...m, calories: m.calories ? String(m.calories) : '', protein: m.protein ? String(m.protein) : '' }));
 
 const num = v => {
   const n = parseFloat(v);
@@ -25,6 +23,7 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
   const [draft, setDraft] = useState(() => toDraft(dayData?.meals));
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   // Reset when the day changes or its saved data reloads
   useEffect(() => {
@@ -36,7 +35,7 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
     setDraft(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
     setDirty(true);
   };
-  const addMeal = () => { setDraft(prev => [...prev, newMeal(prev.length)]); setDirty(true); };
+  const addMeal = () => { setDraft(prev => [...prev, newMeal(prev.length)]); setDirty(true); setExpanded(true); };
   const removeMeal = id => { setDraft(prev => prev.filter(m => m.id !== id)); setDirty(true); };
 
   const totalCalories = draft.reduce((sum, m) => sum + num(m.calories), 0);
@@ -68,7 +67,7 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
 
   return (
     <View>
-      <View style={s.headerRow}>
+      <TouchableOpacity style={s.headerRow} onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
         <View style={[s.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
           <Ionicons name="restaurant-outline" size={18} color={Colors.text} />
         </View>
@@ -76,8 +75,16 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
           <Text style={s.title}>Meals</Text>
           <Text style={s.sub}>{Math.round(totalCalories).toLocaleString()} kcal · {Math.round(totalProtein)} g protein</Text>
         </View>
-      </View>
+        <TouchableOpacity style={s.addBtn} onPress={addMeal} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="add" size={20} color={Colors.onPrimary} />
+        </TouchableOpacity>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.gray} />
+      </TouchableOpacity>
 
+      {expanded && (draft.length === 0 ? (
+        <Text style={s.emptyText}>No meals logged. Tap + to add one.</Text>
+      ) : (
+      <>
       <View style={s.colHeaderRow}>
         <Text style={[s.colHeader, { flex: 1 }]}>MEAL</Text>
         <Text style={[s.colHeader, s.kcalCol]}>KCAL</Text>
@@ -119,22 +126,24 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
         </View>
       ))}
 
-      <View style={s.actionsRow}>
-        <TouchableOpacity style={s.addMealBtn} onPress={addMeal} activeOpacity={0.7}>
-          <Ionicons name="add-circle-outline" size={18} color={Colors.text} />
-          <Text style={s.addMealText}>Add meal</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.saveBtn, (!dirty || saving) && s.saveBtnDisabled]}
-          onPress={save}
-          disabled={!dirty || saving}
-          activeOpacity={0.8}
-        >
-          {saving
-            ? <ActivityIndicator size="small" color={Colors.onPrimary} />
-            : <Text style={s.saveText}>Save meals</Text>}
-        </TouchableOpacity>
-      </View>
+      </>
+      ))}
+
+      {/* Shown whenever there are unsaved changes (e.g. last meal removed) */}
+      {expanded && dirty && (
+        <View style={s.actionsRow}>
+          <TouchableOpacity
+            style={[s.saveBtn, saving && s.saveBtnDisabled]}
+            onPress={save}
+            disabled={saving}
+            activeOpacity={0.8}
+          >
+            {saving
+              ? <ActivityIndicator size="small" color={Colors.onPrimary} />
+              : <Text style={s.saveText}>Save meals</Text>}
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -162,9 +171,9 @@ const s = StyleSheet.create({
   gUnit: { fontSize: 12, color: Colors.gray },
   removeCol: { width: 20, alignItems: 'center' },
 
-  actionsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  addMealBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8 },
-  addMealText: { fontSize: 14, color: Colors.text, fontWeight: '600' },
+  addBtn: { width: 30, height: 30, borderRadius: 999, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  emptyText: { fontSize: 13, color: Colors.gray, marginTop: 12 },
+  actionsRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 },
   saveBtn: { paddingVertical: 9, paddingHorizontal: 16, backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center', minWidth: 100 },
   saveBtnDisabled: { opacity: 0.4 },
   saveText: { color: Colors.onPrimary, fontSize: 14, fontWeight: '700' },
