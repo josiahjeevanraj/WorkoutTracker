@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '../services/supabaseClient';
-import { UNIT_OPTIONS } from '../utils/units';
+import { UNIT_OPTIONS, weightUnit } from '../utils/units';
+import WorkoutPlansModal from '../components/workout/WorkoutPlansModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -21,6 +22,7 @@ const ProfileScreen = () => {
   const [showPRModal, setShowPRModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUnitsModal, setShowUnitsModal] = useState(false);
+  const [showPlansModal, setShowPlansModal] = useState(false);
   const [history, setHistory] = useState([]);
   const [profile, setProfile] = useState({});
   const [editName, setEditName] = useState('');
@@ -142,6 +144,7 @@ const ProfileScreen = () => {
 
   const primarySettings = [
     { icon: 'person-outline',  color: colors.primary, title: 'Edit Profile', sub: 'Name, email', onPress: openEditModal },
+    { icon: 'clipboard-outline', color: colors.primary, title: 'Workout Plans', sub: 'Templates to prefill your sessions', onPress: () => setShowPlansModal(true) },
     { icon: 'body-outline',    color: colors.primary, title: 'Units', sub: `${units.label} (${units.weight})`, onPress: () => setShowUnitsModal(true) },
   ];
 
@@ -258,6 +261,12 @@ const ProfileScreen = () => {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <WorkoutPlansModal
+        visible={showPlansModal}
+        onClose={() => setShowPlansModal(false)}
+        defaultUnit={weightUnit(profile.units)}
+      />
 
       {/* Units modal */}
       <Modal visible={showUnitsModal} transparent animationType="slide" onRequestClose={() => setShowUnitsModal(false)}>

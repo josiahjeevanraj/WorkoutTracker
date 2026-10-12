@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor, { cleanExercises, hasEmptyReps } from './ExerciseEditor';
+import { planToEditorExercises } from './WorkoutPlansModal';
 import styles from './workoutStyles';
 
 // targetDate: optional 'YYYY-MM-DD' to log against a past day (from the calendar)
@@ -16,9 +17,21 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   // Ref guards against double-taps landing before the saving re-render
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [planId, setPlanId] = useState(null);
+
+  useEffect(() => {
+    if (visible) StorageService.getWorkouts().then(p => setPlans(p || [])).catch(console.error);
+  }, [visible]);
+
+  const applyPlan = plan => {
+    setPlanId(plan.id);
+    setName(plan.name);
+    setExercises(planToEditorExercises(plan, defaultUnit));
+  };
 
   const close = () => {
-    setName(''); setExercises([]); setNotes('');
+    setName(''); setExercises([]); setNotes(''); setPlanId(null);
     onClose();
   };
 
@@ -47,6 +60,24 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
         <View style={styles.logModal}>
           <Text style={styles.modalTitle}>Log Workout</Text>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
+            {plans.length > 0 && (
+              <>
+                <Text style={styles.logSectionLabel}>Start from plan</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planChipRow} style={{ marginBottom: 16 }}>
+                  {plans.map(plan => (
+                    <TouchableOpacity
+                      key={plan.id}
+                      style={[styles.planChip, planId === plan.id && styles.planChipActive]}
+                      onPress={() => applyPlan(plan)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.planChipText, planId === plan.id && styles.planChipTextActive]}>{plan.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
 
             <Text style={styles.logSectionLabel}>Session Name</Text>
             <TextInput

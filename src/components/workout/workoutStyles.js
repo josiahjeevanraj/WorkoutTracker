@@ -96,4 +96,17 @@ export default StyleSheet.create({
   cancelBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
   saveBtn: { backgroundColor: Colors.primary },
   saveBtnText: { color: Colors.onPrimary, fontWeight: '600', fontSize: 16 },
+
+  // Workout plans
+  planRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background, marginBottom: 8 },
+  planRowName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  planRowMeta: { fontSize: 12, color: Colors.gray, marginTop: 2 },
+  planEmptyText: { fontSize: 14, color: Colors.gray, textAlign: 'center', paddingVertical: 16 },
+  planDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, marginTop: 12 },
+  planDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
+  planChipRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
+  planChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
+  planChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  planChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  planChipTextActive: { color: Colors.onPrimary },
 });

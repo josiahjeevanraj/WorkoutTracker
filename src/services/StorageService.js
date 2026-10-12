@@ -66,7 +66,7 @@ class StorageService {
         createdAt: new Date().toISOString(),
       };
       workouts.push(newWorkout);
-      await this.saveWorkouts(workouts);
+      if (!(await this.saveWorkouts(workouts))) return null;
       return newWorkout;
     } catch (error) {
       console.error('Error adding workout:', error);
@@ -80,7 +80,7 @@ class StorageService {
       const index = workouts.findIndex(w => w.id === id);
       if (index !== -1) {
         workouts[index] = { ...workouts[index], ...updates };
-        await this.saveWorkouts(workouts);
+        if (!(await this.saveWorkouts(workouts))) return null;
         return workouts[index];
       }
       return null;
@@ -94,8 +94,7 @@ class StorageService {
     try {
       const workouts = await this.getWorkouts();
       const filtered = workouts.filter(w => w.id !== id);
-      await this.saveWorkouts(filtered);
-      return true;
+      return await this.saveWorkouts(filtered);
     } catch (error) {
       console.error('Error deleting workout:', error);
       return false;
