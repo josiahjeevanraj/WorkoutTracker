@@ -1,10 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Dimensions, Keyboard,
+  ActivityIndicator, TextInput, Keyboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import Svg, { Path, Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
@@ -16,34 +15,16 @@ import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_INNER_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
-
-const WEIGHT_WINDOW_DAYS = 30;
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Local-date key, matches ProgressScreen / CalendarScreen fitness_data keys
 const toKey = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const daysAgoKey = n => {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return toKey(d);
-};
-
 const daysBetween = (fromKey, toKeyStr) =>
   Math.round((new Date(toKeyStr + 'T12:00:00') - new Date(fromKey + 'T12:00:00')) / 86400000);
 
 const fmtNum = v => (v % 1 === 0 ? String(v) : v.toFixed(1));
-
-const fmtDelta = v => `${v > 0 ? '+' : ''}${fmtNum(Math.round(v * 10) / 10)}`;
-
-function fmtShortDate(key) {
-  const d = new Date(key + 'T12:00:00');
-  return `${MON_NAMES[d.getMonth()]} ${d.getDate()}`;
-}
 
 function fmtAgo(key, todayKey) {
   const n = daysBetween(key, todayKey);
@@ -60,28 +41,6 @@ function getWeightSeries(fitnessData) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// ─── Line chart ───────────────────────────────────────────────────────────────
-
-const LineChart = ({ values, width, height, color, strokeWidth = 2 }) => {
-  if (values.length < 2) return null;
-  const PAD = 4;
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const pts = values.map((v, i) => ({
-    x: PAD + (i / (values.length - 1)) * (width - PAD * 2),
-    y: PAD + (1 - (v - min) / range) * (height - PAD * 2),
-  }));
-  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
-  return (
-    <Svg width={width} height={height}>
-      <Path d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinejoin="round" strokeLinecap="round" />
-      <Circle cx={last.x} cy={last.y} r={strokeWidth + 1.5} fill={color} />
-    </Svg>
-  );
-};
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const HomeScreen = () => {
@@ -91,6 +50,7 @@ const HomeScreen = () => {
   const [profile, setProfile] = useState(null);
   const [weightInput, setWeightInput] = useState('');
   const [savingWeight, setSavingWeight] = useState(false);
+  const [editingWeight, setEditingWeight] = useState(false);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
@@ -145,6 +105,7 @@ const HomeScreen = () => {
     if (ok) {
       setFitnessData(updated);
       setWeightInput('');
+      setEditingWeight(false);
     }
     setSavingWeight(false);
   };
@@ -160,11 +121,6 @@ const HomeScreen = () => {
   const weightSeries = getWeightSeries(fitnessData);
   const latestWeight = weightSeries[weightSeries.length - 1] || null;
   const weightLoggedToday = latestWeight?.date === todayKey;
-  const recentWeights = weightSeries.filter(w => w.date >= daysAgoKey(WEIGHT_WINDOW_DAYS));
-  const weightChange = recentWeights.length >= 2
-    ? recentWeights[recentWeights.length - 1].weight - recentWeights[0].weight
-    : null;
-  const goalWeight = profile?.goalWeight || null;
 
   // Today's workouts
   const todaySessions = history
@@ -215,10 +171,25 @@ const HomeScreen = () => {
                     : 'No weight logged yet'}
               </Text>
             </View>
-            {weightLoggedToday ? (
-              <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
+            {weightLoggedToday && !editingWeight ? (
+              <TouchableOpacity
+                style={styles.editIconBtn}
+                onPress={() => { setWeightInput(w(latestWeight.weight)); setEditingWeight(true); }}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="pencil" size={16} color={Colors.text} />
+              </TouchableOpacity>
             ) : (
               <View style={styles.weightInputRow}>
+                {editingWeight && (
+                  <TouchableOpacity
+                    onPress={() => { setEditingWeight(false); setWeightInput(''); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close" size={20} color={Colors.gray} />
+                  </TouchableOpacity>
+                )}
                 <TextInput
                   style={styles.weightInput}
                   value={weightInput}
@@ -228,6 +199,8 @@ const HomeScreen = () => {
                   keyboardType="decimal-pad"
                   returnKeyType="done"
                   onSubmitEditing={saveWeight}
+                  autoFocus={editingWeight}
+                  selectTextOnFocus
                 />
                 <TouchableOpacity
                   style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
@@ -285,51 +258,6 @@ const HomeScreen = () => {
                 </TouchableOpacity>
               );
             })
-          )}
-        </View>
-
-        {/* Weight progression */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardLabel}>WEIGHT · LAST {WEIGHT_WINDOW_DAYS} DAYS</Text>
-            {weightChange != null && (
-              <Text style={[styles.deltaText, { color: weightChange <= 0 ? Colors.green : Colors.amber }]}>
-                {fmtDelta(kgToDisplay(weightChange, units))} {unit}
-              </Text>
-            )}
-          </View>
-          {latestWeight ? (
-            <>
-              <View style={styles.bigValueRow}>
-                <Text style={styles.bigValue}>{w(latestWeight.weight)}</Text>
-                <Text style={styles.bigUnit}> {unit}</Text>
-                {goalWeight != null && (
-                  <Text style={styles.goalText}>
-                    Goal {w(goalWeight)} {unit} · {w(Math.abs(latestWeight.weight - goalWeight))} to go
-                  </Text>
-                )}
-              </View>
-              {recentWeights.length >= 2 ? (
-                <>
-                  <View style={{ marginTop: 14 }}>
-                    <LineChart
-                      values={recentWeights.map(w => w.weight)}
-                      width={CARD_INNER_W}
-                      height={90}
-                      color={Colors.text}
-                    />
-                  </View>
-                  <View style={styles.chartAxis}>
-                    <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[0].date)}</Text>
-                    <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[recentWeights.length - 1].date)}</Text>
-                  </View>
-                </>
-              ) : (
-                <Text style={styles.emptyText}>Log a few more weigh-ins to see your trend.</Text>
-              )}
-            </>
-          ) : (
-            <Text style={styles.emptyText}>Log your weight above to start tracking.</Text>
           )}
         </View>
 
@@ -394,6 +322,10 @@ const styles = StyleSheet.create({
   promptTitle: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
   promptSub:   { fontSize: 12, color: Colors.gray, marginTop: 2 },
   weightInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  editIconBtn: {
+    width: 36, height: 36, borderRadius: 10,
+    backgroundColor: 'rgba(88,216,219,0.12)', justifyContent: 'center', alignItems: 'center',
+  },
   weightInput: {
     width: 64, paddingVertical: 8, paddingHorizontal: 10,
     backgroundColor: Colors.background, borderRadius: 10,
@@ -406,15 +338,6 @@ const styles = StyleSheet.create({
   },
   actionBtnDisabled: { opacity: 0.4 },
   actionBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
-
-  // Weight progression
-  deltaText:   { fontSize: 13, fontWeight: '700' },
-  bigValueRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', marginTop: 8 },
-  bigValue:    { fontSize: 32, fontWeight: '800', color: '#FFFFFF' },
-  bigUnit:     { fontSize: 14, color: Colors.gray, fontWeight: '500' },
-  goalText:    { fontSize: 12, color: Colors.textSecondary, marginLeft: 12 },
-  chartAxis:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
-  axisLabel:   { fontSize: 10, color: Colors.gray, fontWeight: '500' },
 
   // Today's workouts
   addBtn: {

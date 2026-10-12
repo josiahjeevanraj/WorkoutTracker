@@ -32,6 +32,19 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => 
     animateOut(() => onClosed?.({ ...session, notes: latest }));
   };
 
+  // Close (saving notes) before handing off: a Modal opened while this one is up
+  // can end up underneath it on web
+  // Awaited so the notes write can't land after (and overwrite) the edit save
+  const handleEdit = async () => {
+    const latest = notesRef.current;
+    if (latest !== (session.notes || '')) {
+      await StorageService.updateWorkoutSession(session.id, { notes: latest }).catch(console.error);
+    }
+    const updated = { ...session, notes: latest };
+    onClosed?.(updated);
+    onEdit?.(updated);
+  };
+
   const handleDelete = () => {
     // Skip the notes save here: a concurrent update could rewrite the session after deletion
     const confirmDelete = async () => {
@@ -131,7 +144,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => 
               <Ionicons name="trash-outline" size={18} color={Colors.softRed} />
               <Text style={styles.expandDeleteText}>Delete</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.expandEditBtn} onPress={() => onEdit?.({ ...session, notes: notesRef.current })}>
+            <TouchableOpacity style={styles.expandEditBtn} onPress={handleEdit}>
               <Ionicons name="pencil" size={18} color="#FFFFFF" />
               <Text style={styles.expandEditText}>Edit Workout</Text>
             </TouchableOpacity>
