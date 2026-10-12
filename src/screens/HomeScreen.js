@@ -11,6 +11,7 @@ import { weightUnit, kgToDisplay, displayToKg } from '../utils/units';
 import LogWorkoutModal from '../components/workout/LogWorkoutModal';
 import EditWorkoutModal from '../components/workout/EditWorkoutModal';
 import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
+import MealLog from '../components/MealLog';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -25,6 +26,20 @@ const daysBetween = (fromKey, toKeyStr) =>
   Math.round((new Date(toKeyStr + 'T12:00:00') - new Date(fromKey + 'T12:00:00')) / 86400000);
 
 const fmtNum = v => (v % 1 === 0 ? String(v) : v.toFixed(1));
+
+const shiftKey = (key, days) => {
+  const d = new Date(key + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return toKey(d);
+};
+
+function fmtDayLabel(key, todayKey) {
+  const n = daysBetween(key, todayKey);
+  if (n === 0) return 'Today';
+  if (n === 1) return 'Yesterday';
+  const d = new Date(key + 'T12:00:00');
+  return `${DAY_NAMES[d.getDay()].slice(0, 3)}, ${MON_NAMES[d.getMonth()]} ${d.getDate()}`;
+}
 
 function fmtAgo(key, todayKey) {
   const n = daysBetween(key, todayKey);
@@ -51,6 +66,7 @@ const HomeScreen = () => {
   const [weightInput, setWeightInput] = useState('');
   const [savingWeight, setSavingWeight] = useState(false);
   const [editingWeight, setEditingWeight] = useState(false);
+  const [selectedKey, setSelectedKey] = useState(() => toKey(new Date()));
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
@@ -91,7 +107,7 @@ const HomeScreen = () => {
     const weight = displayToKg(entered, units);
     Keyboard.dismiss();
     setSavingWeight(true);
-    const key = toKey(new Date());
+    const key = selectedKey;
     const latest = (await StorageService.getFitnessData()) || {};
     const updated = {
       ...latest,
@@ -117,10 +133,16 @@ const HomeScreen = () => {
   const unit = weightUnit(units);
   const w = kg => fmtNum(kgToDisplay(kg, units)); // kg value -> display string
 
-  // Weight
-  const weightSeries = getWeightSeries(fitnessData);
-  const latestWeight = weightSeries[weightSeries.length - 1] || null;
-  const weightLoggedToday = latestWeight?.date === todayKey;
+  const changeDay = days => {
+    setSelectedKey(prev => shiftKey(prev, days));
+    setEditingWeight(false);
+    setWeightInput('');
+  };
+
+  // Weight for the selected day, and the most recent weigh-in before it
+  const dayWeight = parseFloat(fitnessData[selectedKey]?.weight) > 0 ? parseFloat(fitnessData[selectedKey].weight) : null;
+  const priorWeight = getWeightSeries(fitnessData).filter(e => e.date < selectedKey).pop() || null;
+  const isToday = selectedKey === todayKey;
 
   // Today's workouts
   const todaySessions = history
@@ -152,9 +174,20 @@ const HomeScreen = () => {
           <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
         </View>
 
-        {/* Log latest data */}
+        {/* Daily log: weight + meals for the selected day */}
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>LOG LATEST</Text>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardLabel}>DAILY LOG</Text>
+            <View style={styles.dayNav}>
+              <TouchableOpacity onPress={() => changeDay(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="chevron-back" size={18} color={Colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
+              <TouchableOpacity onPress={() => changeDay(1)} disabled={isToday} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : Colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* Weight */}
           <View style={styles.promptRow}>
@@ -164,17 +197,17 @@ const HomeScreen = () => {
             <View style={styles.promptText}>
               <Text style={styles.promptTitle}>Weight</Text>
               <Text style={styles.promptSub}>
-                {weightLoggedToday
-                  ? `${w(latestWeight.weight)} ${unit} logged today`
-                  : latestWeight
-                    ? `Last: ${w(latestWeight.weight)} ${unit}, ${fmtAgo(latestWeight.date, todayKey)}`
+                {dayWeight != null
+                  ? `${w(dayWeight)} ${unit} logged${isToday ? ' today' : ''}`
+                  : priorWeight
+                    ? `Last: ${w(priorWeight.weight)} ${unit}, ${fmtAgo(priorWeight.date, todayKey)}`
                     : 'No weight logged yet'}
               </Text>
             </View>
-            {weightLoggedToday && !editingWeight ? (
+            {dayWeight != null && !editingWeight ? (
               <TouchableOpacity
                 style={styles.editIconBtn}
-                onPress={() => { setWeightInput(w(latestWeight.weight)); setEditingWeight(true); }}
+                onPress={() => { setWeightInput(w(dayWeight)); setEditingWeight(true); }}
                 activeOpacity={0.7}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
@@ -194,7 +227,7 @@ const HomeScreen = () => {
                   style={styles.weightInput}
                   value={weightInput}
                   onChangeText={setWeightInput}
-                  placeholder={latestWeight ? w(latestWeight.weight) : unit}
+                  placeholder={priorWeight ? w(priorWeight.weight) : unit}
                   placeholderTextColor={Colors.gray}
                   keyboardType="decimal-pad"
                   returnKeyType="done"
@@ -215,6 +248,14 @@ const HomeScreen = () => {
               </View>
             )}
           </View>
+
+          <View style={styles.divider} />
+
+          <MealLog
+            dayKey={selectedKey}
+            dayData={fitnessData[selectedKey]}
+            onSaved={setFitnessData}
+          />
         </View>
 
         {/* Today's workouts */}
@@ -315,6 +356,9 @@ const styles = StyleSheet.create({
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardLabel: { fontSize: 11, color: Colors.gray, fontWeight: '600', letterSpacing: 1 },
   emptyText: { fontSize: 13, color: Colors.gray, marginTop: 12 },
+  divider:   { height: 1, backgroundColor: Colors.borderColor, marginVertical: 16 },
+  dayNav:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dayNavLabel: { fontSize: 13, fontWeight: '600', color: '#FFFFFF', minWidth: 88, textAlign: 'center' },
 
   // Prompt rows
   promptRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
