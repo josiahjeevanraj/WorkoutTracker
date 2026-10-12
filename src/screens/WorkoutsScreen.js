@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
-  View, Text, StyleSheet, SectionList, TouchableOpacity, Dimensions,
+  View, Text, StyleSheet, SectionList, TouchableOpacity,
 } from 'react-native';
 
-const { height: SCREEN_H } = Dimensions.get('window');
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
@@ -133,7 +132,6 @@ const WorkoutsScreen = () => {
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [activeView, setActiveView] = useState('calendar');
   const [logTargetDate, setLogTargetDate] = useState(null);
-  const [containerHeight, setContainerHeight] = useState(SCREEN_H);
   const cardRefs = useRef({});
 
   const [defaultUnit, setDefaultUnit] = useState('kg');
@@ -210,7 +208,7 @@ const WorkoutsScreen = () => {
   );
 
   return (
-    <View style={styles.container} onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}>
+    <View style={styles.container}>
 
       {/* Header */}
       <View style={styles.header}>
@@ -276,7 +274,6 @@ const WorkoutsScreen = () => {
           key={expandedCard.session.id}
           session={expandedCard.session}
           rect={expandedCard.rect}
-          containerHeight={containerHeight}
           onClosed={updated => {
             setExpandedCard(null);
             setHistory(prev => prev.map(s => s.id === updated.id ? { ...s, notes: updated.notes } : s));

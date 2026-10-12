@@ -1,21 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Animated, Alert, Platform, Dimensions,
+  View, Text, TextInput, TouchableOpacity, ScrollView, Animated, Alert, Platform, Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import styles from './workoutStyles';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
 const formatTime = iso =>
   new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
-// Full-screen hero that grows out of the tapped card.
-// rect: the card's page position from measure(); the parent must be a full-screen,
-// flex: 1 container that this renders into as its last child.
-const ExpandedSessionCard = ({ session, rect, containerHeight, onClosed, onEdit, onDeleted }) => {
+// Full-screen hero that grows out of the tapped card. Rendered in a Modal so it
+// fills the window regardless of the parent's layout (rect: page position from measure()).
+const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted }) => {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const anim = useRef(new Animated.Value(0)).current;
   const [notes, setNotes] = useState(session.notes || '');
   const notesRef = useRef(session.notes || '');
@@ -52,15 +51,15 @@ const ExpandedSessionCard = ({ session, rect, containerHeight, onClosed, onEdit,
 
   const animLeft   = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.x, 0] });
   const animTop    = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.y, 0] });
-  const animWidth  = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.width, SCREEN_W] });
-  const animHeight = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, containerHeight] });
+  const animWidth  = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.width, windowWidth] });
+  const animHeight = anim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, windowHeight] });
   const animRadius = anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
   const contentOp  = anim.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1] });
   const backdropOp = anim.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1] });
   const exercises  = session.exercises || [];
 
   return (
-    <>
+    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={close}>
       <Animated.View style={[styles.expandBackdrop, { opacity: backdropOp }]}
         pointerEvents="auto">
         <TouchableOpacity style={{ flex: 1 }} onPress={close} activeOpacity={1} />
@@ -139,7 +138,7 @@ const ExpandedSessionCard = ({ session, rect, containerHeight, onClosed, onEdit,
           </View>
         </Animated.View>
       </Animated.View>
-    </>
+    </Modal>
   );
 };
 

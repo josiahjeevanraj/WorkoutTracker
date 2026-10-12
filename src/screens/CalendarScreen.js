@@ -2,14 +2,13 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Animated, Dimensions,
+  TextInput, KeyboardAvoidingView, Platform, Alert, Modal,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import StorageService from '../services/StorageService';
+import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 import showAlert from '../utils/showAlert';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,8 +134,6 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [expandedCard, setExpandedCard] = useState(null);
-  const [containerHeight, setContainerHeight] = useState(600);
-  const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
 
   const workoutCategories = {
@@ -355,32 +352,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
     if (!ref) return;
     ref.measure((x, y, width, height, pageX, pageY) => {
       setExpandedCard({ session, rect: { x: pageX, y: pageY, width, height } });
-      expandAnim.setValue(0);
-      Animated.spring(expandAnim, { toValue: 1, useNativeDriver: false, tension: 55, friction: 11 }).start();
     });
-  };
-
-  const closeExpansion = () => {
-    Animated.spring(expandAnim, { toValue: 0, useNativeDriver: false, tension: 65, friction: 12 })
-      .start(() => setExpandedCard(null));
-  };
-
-  const handleDeleteFromExpansion = () => {
-    const confirmDelete = async () => {
-      const id = expandedCard?.session?.id;
-      if (!id) return;
-      closeExpansion();
-      await StorageService.deleteWorkoutSession(id);
-      onSessionDeleted?.();
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm('Delete Workout\n\nThis cannot be undone.')) confirmDelete();
-      return;
-    }
-    Alert.alert('Delete Workout', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: confirmDelete },
-    ]);
   };
 
   const handleDeleteSession = async (id) => {
@@ -680,7 +652,7 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
   const todayKey = toDateKey(today.getFullYear(), today.getMonth() + 1, today.getDate());
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}>
+    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* Calendar header */}
@@ -756,87 +728,16 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
       </ScrollView>
 
       {/* Expanded card (iOS-style hero) */}
-      {expandedCard && (() => {
-        const { session, rect } = expandedCard;
-        const animLeft   = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.x, 0] });
-        const animTop    = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.y, 0] });
-        const animWidth  = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.width, SCREEN_W] });
-        const animHeight = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [rect.height, containerHeight] });
-        const animRadius = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
-        const contentOp  = expandAnim.interpolate({ inputRange: [0.45, 1], outputRange: [0, 1] });
-        const backdropOp = expandAnim.interpolate({ inputRange: [0, 0.5], outputRange: [0, 1] });
-        const exercises  = session.exercises || [];
-        return (
-          <>
-            <Animated.View style={[s.expandBackdrop, { opacity: backdropOp }]} pointerEvents="auto">
-              <TouchableOpacity style={{ flex: 1 }} onPress={closeExpansion} activeOpacity={1} />
-            </Animated.View>
-            <Animated.View style={[s.expandedCard, {
-              left: animLeft, top: animTop, width: animWidth, height: animHeight, borderRadius: animRadius,
-            }]}>
-              <Animated.View style={[{ flex: 1 }, { opacity: contentOp }]}>
-                <View style={s.expandHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.expandTime}>
-                      {new Date(session.completedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                      {' · '}{formatTime(session.completedAt)}
-                    </Text>
-                    <Text style={s.expandName}>{session.name}</Text>
-                  </View>
-                  <TouchableOpacity onPress={closeExpansion} style={s.expandCloseBtn}>
-                    <Ionicons name="close" size={20} color={Colors.gray} />
-                  </TouchableOpacity>
-                </View>
-                <ScrollView style={s.expandScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}>
-                  {exercises.length === 0 ? (
-                    <Text style={s.noExercisesText}>No exercises recorded</Text>
-                  ) : exercises.map((ex, i) => (
-                    <View key={i} style={s.expandExercise}>
-                      <View style={s.expandExHeader}>
-                        <Text style={s.expandExName}>{ex.name}</Text>
-                        {Array.isArray(ex.sets) && (
-                          <Text style={s.expandExSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
-                        )}
-                      </View>
-                      {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
-                        <View key={si} style={[s.expandSetRow, set.warmup && s.expandWarmupRow]}>
-                          <View style={s.expandSetLabelRow}>
-                            {set.warmup && (
-                              <View style={s.warmupTag}>
-                                <Text style={s.warmupTagText}>W</Text>
-                              </View>
-                            )}
-                            <Text style={[s.expandSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
-                          </View>
-                          <Text style={s.expandSetMeta}>
-                            {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  ))}
-                  {!!session.notes && (
-                    <View style={s.expandNotesBlock}>
-                      <Text style={s.expandNotesLabel}>Notes</Text>
-                      <Text style={s.expandNotes}>{session.notes}</Text>
-                    </View>
-                  )}
-                </ScrollView>
-                <View style={s.expandActions}>
-                  <TouchableOpacity style={s.expandDeleteBtn} onPress={handleDeleteFromExpansion}>
-                    <Ionicons name="trash-outline" size={18} color={Colors.softRed} />
-                    <Text style={s.expandDeleteText}>Delete</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.expandEditBtn} onPress={() => { closeExpansion(); onEditSession?.(session); }}>
-                    <Ionicons name="pencil" size={18} color="#FFFFFF" />
-                    <Text style={s.expandEditText}>Edit Workout</Text>
-                  </TouchableOpacity>
-                </View>
-              </Animated.View>
-            </Animated.View>
-          </>
-        );
-      })()}
+      {expandedCard && (
+        <ExpandedSessionCard
+          key={expandedCard.session.id}
+          session={expandedCard.session}
+          rect={expandedCard.rect}
+          onClosed={() => { setExpandedCard(null); onSessionDeleted?.(); }}
+          onEdit={session => { setExpandedCard(null); onEditSession?.(session); }}
+          onDeleted={() => { setExpandedCard(null); onSessionDeleted?.(); }}
+        />
+      )}
 
       {/* Year / month pickers */}
       <Modal visible={showYearPicker} transparent animationType="fade" onRequestClose={() => setShowYearPicker(false)}>
@@ -1039,35 +940,6 @@ const s = StyleSheet.create({
 
   logWorkoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: Colors.primary, borderRadius: 12, paddingVertical: 13, marginTop: 12 },
   logWorkoutBtnText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
-
-  // Expansion animation
-  expandBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 },
-  expandedCard: { position: 'absolute', zIndex: 11, backgroundColor: Colors.cardBackground, overflow: 'hidden' },
-  expandHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
-  expandTime: { fontSize: 12, color: Colors.gray, fontWeight: '500', marginBottom: 4 },
-  expandName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },
-  expandCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center', marginLeft: 12, marginTop: 4 },
-  expandScroll: { flex: 1 },
-  expandExercise: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
-  expandExHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  expandExName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', flex: 1 },
-  expandExSetCount: { fontSize: 12, color: Colors.gray },
-  expandSetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 4, borderRadius: 6 },
-  expandWarmupRow: { backgroundColor: 'rgba(251,191,36,0.06)' },
-  expandSetLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  expandSetLabel: { fontSize: 13, color: Colors.gray, fontWeight: '600' },
-  expandSetMeta: { fontSize: 13, color: Colors.text, fontWeight: '500' },
-  warmupTag: { backgroundColor: Colors.amber, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
-  warmupTagText: { fontSize: 9, fontWeight: '800', color: Colors.background, letterSpacing: 0.3 },
-  expandNotesBlock: { marginTop: 20, padding: 14, backgroundColor: Colors.background, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
-  expandNotesLabel: { fontSize: 11, color: Colors.gray, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
-  expandNotes: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
-  expandActions: { flexDirection: 'row', gap: 12, padding: 20, paddingBottom: 40, borderTopWidth: 1, borderTopColor: Colors.borderColor },
-  expandDeleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 13, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderColor },
-  expandDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
-  expandEditBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 12, backgroundColor: Colors.primary },
-  expandEditText: { fontSize: 14, color: '#FFFFFF', fontWeight: '700' },
-  noExercisesText: { color: Colors.gray, fontSize: 14, fontStyle: 'italic', paddingTop: 20 },
 
   pickerModal: { borderRadius: 18, padding: 20, width: '88%', maxHeight: '60%', borderWidth: 1 },
   pickerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },

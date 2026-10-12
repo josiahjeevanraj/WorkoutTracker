@@ -16,7 +16,7 @@ import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_INNER_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
 
 const WEIGHT_WINDOW_DAYS = 30;
@@ -94,7 +94,6 @@ const HomeScreen = () => {
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
-  const [containerHeight, setContainerHeight] = useState(SCREEN_HEIGHT);
   const sessionRefs = useRef({});
 
   useFocusEffect(useCallback(() => {
@@ -181,7 +180,7 @@ const HomeScreen = () => {
   }
 
   return (
-    <View style={styles.container} onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}>
+    <View style={styles.container}>
       <ScrollView
         style={styles.container}
         showsVerticalScrollIndicator={false}
@@ -355,7 +354,6 @@ const HomeScreen = () => {
           key={expandedCard.session.id}
           session={expandedCard.session}
           rect={expandedCard.rect}
-          containerHeight={containerHeight}
           onClosed={updated => {
             setExpandedCard(null);
             setHistory(prev => prev.map(s => s.id === updated.id ? { ...s, notes: updated.notes } : s));
