@@ -10,8 +10,9 @@ const toKey = d =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Single-date month picker drawn as an overlay inside its parent (not a Modal, so it
-// can sit on top of another Modal on web). `markedKey` highlights a reference day.
-const DayPicker = ({ title, markedKey, onSelect, onCancel }) => {
+// can sit on top of another Modal on web). `markedKey` highlights a reference day;
+// days after `maxKey` (optional, 'YYYY-MM-DD') can't be picked.
+const DayPicker = ({ title, markedKey, maxKey, onSelect, onCancel }) => {
   const start = markedKey ? new Date(markedKey + 'T12:00:00') : new Date();
   const [year, setYear] = useState(start.getFullYear());
   const [month, setMonth] = useState(start.getMonth());
@@ -52,9 +53,10 @@ const DayPicker = ({ title, markedKey, onSelect, onCancel }) => {
                 <TouchableOpacity
                   style={[s.cell, key === markedKey && s.cellMarked, key === todayKey && s.cellToday]}
                   onPress={() => onSelect(key)}
+                  disabled={!!maxKey && key > maxKey}
                   activeOpacity={0.7}
                 >
-                  <Text style={[s.cellText, key === markedKey && s.cellTextMarked]}>{parseInt(key.slice(8), 10)}</Text>
+                  <Text style={[s.cellText, key === markedKey && s.cellTextMarked, !!maxKey && key > maxKey && s.cellTextDisabled]}>{parseInt(key.slice(8), 10)}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -83,6 +85,7 @@ const s = StyleSheet.create({
   cellToday: { borderWidth: 1, borderColor: Colors.borderColor },
   cellText: { fontSize: 14, color: '#FFFFFF' },
   cellTextMarked: { color: Colors.onPrimary, fontWeight: '700' },
+  cellTextDisabled: { color: Colors.borderColor },
   cancelBtn: { marginTop: 14, paddingVertical: 12, borderRadius: 12, backgroundColor: Colors.darkGray, alignItems: 'center' },
   cancelText: { color: '#FFFFFF', fontWeight: '600', fontSize: 15 },
 });

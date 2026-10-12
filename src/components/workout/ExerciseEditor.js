@@ -1,9 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { EXERCISE_LIST } from '../../constants/exercises';
+import useCustomExercises, { addCustomExercise } from '../../hooks/useCustomExercises';
+import showAlert from '../../utils/showAlert';
 import styles from './workoutStyles';
 
 export const newExercise = defaultUnit => ({
@@ -112,9 +114,26 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
   const removeSet = (exKey, setIdx) =>
     updateSets(exKey, sets => sets.filter((_, i) => i !== setIdx));
 
-  const pickerResults = pickerSearch.trim()
-    ? EXERCISE_LIST.filter(n => n.toLowerCase().includes(pickerSearch.toLowerCase()))
-    : EXERCISE_LIST;
+  // The user's own exercises first, then the built-in list
+  const customExercises = useCustomExercises();
+  const allExercises = useMemo(() => {
+    const builtIn = new Set(EXERCISE_LIST.map(n => n.toLowerCase()));
+    return [...customExercises.filter(n => !builtIn.has(n.toLowerCase())), ...EXERCISE_LIST];
+  }, [customExercises]);
+
+  const query = pickerSearch.trim();
+  const pickerResults = query
+    ? allExercises.filter(n => n.toLowerCase().includes(query.toLowerCase()))
+    : allExercises;
+  const canAddCustom = !!query && !allExercises.some(n => n.toLowerCase() === query.toLowerCase());
+
+  const pickExercise = (exKey, name) => { updateExercise(exKey, 'name', name); setPickerKey(null); };
+  const addAndPick = async (exKey, name) => {
+    pickExercise(exKey, name);
+    if (!(await addCustomExercise(name))) {
+      showAlert('Not saved to your list', `"${name}" is used here but couldn't be saved for future picking.`);
+    }
+  };
 
   return (
     <>
@@ -144,7 +163,9 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
                     style={styles.inlineSearchInput}
                     value={pickerSearch}
                     onChangeText={setPickerSearch}
-                    placeholder="Search exercises..."
+                    placeholder="Search or add exercise..."
+                    returnKeyType="done"
+                    onSubmitEditing={() => { if (canAddCustom) addAndPick(ex._key, query); }}
                     placeholderTextColor={Colors.gray}
                   />
                   {pickerSearch.length > 0 && (
@@ -154,11 +175,19 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
                   )}
                 </View>
                 <ScrollView style={styles.inlinePickerList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+                  {canAddCustom && (
+                    <TouchableOpacity style={styles.inlinePickerItem} onPress={() => addAndPick(ex._key, query)}>
+                      <View style={styles.inlinePickerAddRow}>
+                        <Ionicons name="add-circle-outline" size={16} color={Colors.text} />
+                        <Text style={styles.inlinePickerAddText} numberOfLines={1}>Add "{query}"</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   {pickerResults.map(name => (
                     <TouchableOpacity
                       key={name}
                       style={styles.inlinePickerItem}
-                      onPress={() => { updateExercise(ex._key, 'name', name); setPickerKey(null); }}
+                      onPress={() => pickExercise(ex._key, name)}
                     >
                       <Text style={styles.inlinePickerItemText}>{name}</Text>
                     </TouchableOpacity>

@@ -6,12 +6,17 @@ const STORAGE_KEYS = {
   WORKOUT_HISTORY: '@workout_history',
   PROGRESS_DATA: '@progress_data',
   FITNESS_DATA: '@fitness_data',
+  CUSTOM_EXERCISES: '@custom_exercises',
 };
 
 let currentUserId = null;
 
 export function setCurrentUserId(id) {
   currentUserId = id;
+}
+
+export function getCurrentUserId() {
+  return currentUserId;
 }
 
 class StorageService {
@@ -192,6 +197,15 @@ class StorageService {
 
   async saveFitnessData(fitnessData) {
     return this._set(STORAGE_KEYS.FITNESS_DATA, fitnessData);
+  }
+
+  // Exercise names the user added that aren't in EXERCISE_LIST
+  async getCustomExercises() {
+    return this._get(STORAGE_KEYS.CUSTOM_EXERCISES, []);
+  }
+
+  async saveCustomExercises(names) {
+    return this._set(STORAGE_KEYS.CUSTOM_EXERCISES, names);
   }
 
   async clearAllData() {

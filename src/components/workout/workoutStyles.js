@@ -59,6 +59,8 @@ export default StyleSheet.create({
   inlinePickerList: { maxHeight: 200 },
   inlinePickerItem: { paddingVertical: 11, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
   inlinePickerItemText: { fontSize: 14, color: '#FFFFFF' },
+  inlinePickerAddRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inlinePickerAddText: { flex: 1, fontSize: 14, color: Colors.text, fontWeight: '600' },
   inlineSetsContainer: { marginTop: 8 },
   swipeHint: { fontSize: 10, color: Colors.gray, textAlign: 'center', marginBottom: 6, letterSpacing: 0.4 },
   inlineSetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, backgroundColor: Colors.background, paddingVertical: 6, paddingHorizontal: 4, borderRadius: 8 },

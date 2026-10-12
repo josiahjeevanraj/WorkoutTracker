@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Keyboard,
+  ActivityIndicator, TextInput, Keyboard, Modal,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import LogWorkoutModal from '../components/workout/LogWorkoutModal';
 import EditWorkoutModal from '../components/workout/EditWorkoutModal';
 import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 import MealLog from '../components/MealLog';
+import DayPicker from '../components/workout/DayPicker';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -67,6 +68,7 @@ const HomeScreen = () => {
   const [savingWeight, setSavingWeight] = useState(false);
   const [editingWeight, setEditingWeight] = useState(false);
   const [selectedKey, setSelectedKey] = useState(() => toKey(new Date()));
+  const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
@@ -133,11 +135,12 @@ const HomeScreen = () => {
   const unit = weightUnit(units);
   const w = kg => fmtNum(kgToDisplay(kg, units)); // kg value -> display string
 
-  const changeDay = days => {
-    setSelectedKey(prev => shiftKey(prev, days));
+  const selectDay = key => {
+    setSelectedKey(key);
     setEditingWeight(false);
     setWeightInput('');
   };
+  const changeDay = days => selectDay(shiftKey(selectedKey, days));
 
   // Weight for the selected day, and the most recent weigh-in before it
   const dayWeight = parseFloat(fitnessData[selectedKey]?.weight) > 0 ? parseFloat(fitnessData[selectedKey].weight) : null;
@@ -179,7 +182,10 @@ const HomeScreen = () => {
           <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="chevron-back" size={18} color={Colors.text} />
           </TouchableOpacity>
-          <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
+          <TouchableOpacity style={styles.dayNavCenter} onPress={() => setDayPickerOpen(true)} activeOpacity={0.7}>
+            <Ionicons name="calendar-outline" size={15} color={Colors.text} />
+            <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(1)} disabled={isToday} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : Colors.text} />
           </TouchableOpacity>
@@ -303,6 +309,16 @@ const HomeScreen = () => {
 
       </ScrollView>
 
+      <Modal visible={dayPickerOpen} transparent animationType="fade" onRequestClose={() => setDayPickerOpen(false)}>
+        <DayPicker
+          title="Go to day"
+          markedKey={selectedKey}
+          maxKey={todayKey}
+          onSelect={key => { selectDay(key); setDayPickerOpen(false); }}
+          onCancel={() => setDayPickerOpen(false)}
+        />
+      </Modal>
+
       <LogWorkoutModal
         visible={logModalVisible}
         onClose={() => setLogModalVisible(false)}
@@ -362,6 +378,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBackground, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderColor,
   },
   dayNavBtn:   { padding: 6 },
+  dayNavCenter: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 8 },
   dayNavLabel: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
 
   // Prompt rows
