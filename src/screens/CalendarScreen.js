@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal, Animated, Dimensions,
@@ -194,9 +195,9 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
 
   const [fitnessData, setFitnessData] = useState({});
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     StorageService.getFitnessData().then(data => setFitnessData(data)).catch(console.error);
-  }, []);
+  }, []));
 
   const sessionsByDate = useMemo(() => {
     const map = {};

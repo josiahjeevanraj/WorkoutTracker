@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, ScrollView, Dimensions,
   TouchableOpacity, FlatList, TextInput, Modal,
@@ -287,7 +288,7 @@ const ProgressScreen = () => {
   const [customPickerVisible, setCustomPickerVisible] = useState(false);
   const [includeWarmupInStats, setIncludeWarmupInStats] = useState(true);
 
-  useEffect(() => { loadData(); loadProfile(); }, []);
+  useFocusEffect(useCallback(() => { loadData(); loadProfile(); }, []));
 
   const loadData = async () => {
     const [fitnessData, history] = await Promise.all([

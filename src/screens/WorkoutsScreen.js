@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
   Modal, ScrollView, TextInput, Alert, KeyboardAvoidingView, Platform,
@@ -226,7 +227,7 @@ const SwipeableSessionCard = React.memo(({ item, cardRef, onPress, onDuplicate, 
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const WorkoutsScreen = () => {
+const WorkoutsScreen = ({ route, navigation }) => {
   const [history, setHistory] = useState([]);
   const [collapsedDays, setCollapsedDays] = useState(new Set());
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
@@ -248,7 +249,14 @@ const WorkoutsScreen = () => {
   const expandAnim = useRef(new Animated.Value(0)).current;
   const cardRefs = useRef({});
 
-  useEffect(() => { loadHistory().catch(console.error); }, []);
+  useFocusEffect(useCallback(() => { loadHistory().catch(console.error); }, []));
+
+  // Home screen's "Log workout" prompt navigates here with openLog set
+  useEffect(() => {
+    if (!route?.params?.openLog) return;
+    setLogModalVisible(true);
+    navigation.setParams({ openLog: undefined });
+  }, [route?.params?.openLog]);
 
   const loadHistory = async () => {
     setHistory(await StorageService.getWorkoutHistory());
