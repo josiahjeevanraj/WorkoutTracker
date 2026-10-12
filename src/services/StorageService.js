@@ -119,7 +119,7 @@ class StorageService {
         completedAt: session.completedAt ?? new Date().toISOString(),
       };
       history.push(newSession);
-      await this.saveWorkoutHistory(history);
+      if (!(await this.saveWorkoutHistory(history))) return null;
       return newSession;
     } catch (error) {
       console.error('Error adding workout session:', error);

@@ -20,7 +20,7 @@ const BODY_METRICS = [
   { id: 'weight',           label: 'Body Weight',   unit: 'kg',   color: Colors.text },
   { id: 'caloriesBurned',   label: 'Cals Burned',   unit: 'kcal', color: Colors.softRed },
   { id: 'caloriesConsumed', label: 'Cals Consumed', unit: 'kcal', color: Colors.amber },
-];
+].filter(m => Platform.OS !== 'web' || m.id === 'weight'); // calorie metrics hidden on web for now
 
 const STRENGTH_METRICS = [
   { id: 'maxWeight', label: 'Max Weight', unit: 'kg', color: Colors.text },

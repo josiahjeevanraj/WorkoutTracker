@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, TextInput, Dimensions, Keyboard,
@@ -9,11 +9,14 @@ import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import { weightUnit, kgToDisplay, displayToKg } from '../utils/units';
+import LogWorkoutModal from '../components/workout/LogWorkoutModal';
+import EditWorkoutModal from '../components/workout/EditWorkoutModal';
+import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_INNER_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
 
 const WEIGHT_WINDOW_DAYS = 30;
@@ -81,13 +84,18 @@ const LineChart = ({ values, width, height, color, strokeWidth = 2 }) => {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const HomeScreen = ({ navigation }) => {
+const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
   const [fitnessData, setFitnessData] = useState({});
   const [profile, setProfile] = useState(null);
   const [weightInput, setWeightInput] = useState('');
   const [savingWeight, setSavingWeight] = useState(false);
+  const [logModalVisible, setLogModalVisible] = useState(false);
+  const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
+  const [editingSession, setEditingSession] = useState(null);
+  const [containerHeight, setContainerHeight] = useState(SCREEN_HEIGHT);
+  const sessionRefs = useRef({});
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -105,6 +113,18 @@ const HomeScreen = ({ navigation }) => {
     })();
     return () => { active = false; };
   }, []));
+
+  const reloadHistory = async () => {
+    setHistory((await StorageService.getWorkoutHistory()) || []);
+  };
+
+  const openSession = session => {
+    const ref = sessionRefs.current[session.id];
+    if (!ref) return;
+    ref.measure((x, y, width, height, pageX, pageY) => {
+      setExpandedCard({ session, rect: { x: pageX, y: pageY, width, height } });
+    });
+  };
 
   const saveWeight = async () => {
     const entered = parseFloat(weightInput);
@@ -161,152 +181,193 @@ const HomeScreen = ({ navigation }) => {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingBottom: 28 }}
-    >
+    <View style={styles.container} onLayout={e => setContainerHeight(e.nativeEvent.layout.height)}>
+      <ScrollView
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 28 }}
+      >
 
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={styles.headerDate}>
-          {DAY_NAMES[today.getDay()]}, {MON_NAMES[today.getMonth()]} {today.getDate()}
-        </Text>
-        <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
-      </View>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <Text style={styles.headerDate}>
+            {DAY_NAMES[today.getDay()]}, {MON_NAMES[today.getMonth()]} {today.getDate()}
+          </Text>
+          <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
+        </View>
 
-      {/* Log latest data */}
-      <View style={styles.card}>
-        <Text style={styles.cardLabel}>LOG LATEST</Text>
+        {/* Log latest data */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>LOG LATEST</Text>
 
-        {/* Weight */}
-        <View style={styles.promptRow}>
-          <View style={[styles.iconBg, { backgroundColor: 'rgba(88,216,219,0.12)' }]}>
-            <Ionicons name="scale-outline" size={18} color={Colors.text} />
-          </View>
-          <View style={styles.promptText}>
-            <Text style={styles.promptTitle}>Weight</Text>
-            <Text style={styles.promptSub}>
-              {weightLoggedToday
-                ? `${w(latestWeight.weight)} ${unit} logged today`
-                : latestWeight
-                  ? `Last: ${w(latestWeight.weight)} ${unit}, ${fmtAgo(latestWeight.date, todayKey)}`
-                  : 'No weight logged yet'}
-            </Text>
-          </View>
-          {weightLoggedToday ? (
-            <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
-          ) : (
-            <View style={styles.weightInputRow}>
-              <TextInput
-                style={styles.weightInput}
-                value={weightInput}
-                onChangeText={setWeightInput}
-                placeholder={latestWeight ? w(latestWeight.weight) : unit}
-                placeholderTextColor={Colors.gray}
-                keyboardType="decimal-pad"
-                returnKeyType="done"
-                onSubmitEditing={saveWeight}
-              />
-              <TouchableOpacity
-                style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
-                onPress={saveWeight}
-                disabled={savingWeight || !(parseFloat(weightInput) > 0)}
-                activeOpacity={0.8}
-              >
-                {savingWeight
-                  ? <ActivityIndicator size="small" color={Colors.white} />
-                  : <Text style={styles.actionBtnText}>Save</Text>}
-              </TouchableOpacity>
+          {/* Weight */}
+          <View style={styles.promptRow}>
+            <View style={[styles.iconBg, { backgroundColor: 'rgba(88,216,219,0.12)' }]}>
+              <Ionicons name="scale-outline" size={18} color={Colors.text} />
             </View>
-          )}
-        </View>
-      </View>
-
-      {/* Today's workouts */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardLabel}>TODAY'S WORKOUTS</Text>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => navigation.navigate('Workouts', { openLog: Date.now() })}
-            activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="add" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-        {todaySessions.length === 0 ? (
-          <Text style={styles.emptyText}>No workouts logged today.</Text>
-        ) : (
-          todaySessions.map((session, i) => {
-            const exercises = session.exercises || [];
-            const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
-            return (
-              <View key={session.id} style={[styles.sessionRow, i > 0 && styles.sessionRowBorder]}>
-                <View style={[styles.iconBg, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-                  <Ionicons name="barbell-outline" size={18} color={Colors.indigo} />
-                </View>
-                <View style={styles.promptText}>
-                  <Text style={styles.promptTitle} numberOfLines={1}>{session.name}</Text>
-                  <Text style={styles.promptSub} numberOfLines={1}>
-                    {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} · {setCount} set{setCount !== 1 ? 's' : ''}
-                    {exercises.length ? ` · ${exercises.map(ex => ex.name).join(', ')}` : ''}
-                  </Text>
-                </View>
-              </View>
-            );
-          })
-        )}
-      </View>
-
-      {/* Weight progression */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardLabel}>WEIGHT · LAST {WEIGHT_WINDOW_DAYS} DAYS</Text>
-          {weightChange != null && (
-            <Text style={[styles.deltaText, { color: weightChange <= 0 ? Colors.green : Colors.amber }]}>
-              {fmtDelta(kgToDisplay(weightChange, units))} {unit}
-            </Text>
-          )}
-        </View>
-        {latestWeight ? (
-          <>
-            <View style={styles.bigValueRow}>
-              <Text style={styles.bigValue}>{w(latestWeight.weight)}</Text>
-              <Text style={styles.bigUnit}> {unit}</Text>
-              {goalWeight != null && (
-                <Text style={styles.goalText}>
-                  Goal {w(goalWeight)} {unit} · {w(Math.abs(latestWeight.weight - goalWeight))} to go
-                </Text>
-              )}
+            <View style={styles.promptText}>
+              <Text style={styles.promptTitle}>Weight</Text>
+              <Text style={styles.promptSub}>
+                {weightLoggedToday
+                  ? `${w(latestWeight.weight)} ${unit} logged today`
+                  : latestWeight
+                    ? `Last: ${w(latestWeight.weight)} ${unit}, ${fmtAgo(latestWeight.date, todayKey)}`
+                    : 'No weight logged yet'}
+              </Text>
             </View>
-            {recentWeights.length >= 2 ? (
-              <>
-                <View style={{ marginTop: 14 }}>
-                  <LineChart
-                    values={recentWeights.map(w => w.weight)}
-                    width={CARD_INNER_W}
-                    height={90}
-                    color={Colors.text}
-                  />
-                </View>
-                <View style={styles.chartAxis}>
-                  <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[0].date)}</Text>
-                  <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[recentWeights.length - 1].date)}</Text>
-                </View>
-              </>
+            {weightLoggedToday ? (
+              <Ionicons name="checkmark-circle" size={22} color={Colors.green} />
             ) : (
-              <Text style={styles.emptyText}>Log a few more weigh-ins to see your trend.</Text>
+              <View style={styles.weightInputRow}>
+                <TextInput
+                  style={styles.weightInput}
+                  value={weightInput}
+                  onChangeText={setWeightInput}
+                  placeholder={latestWeight ? w(latestWeight.weight) : unit}
+                  placeholderTextColor={Colors.gray}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  onSubmitEditing={saveWeight}
+                />
+                <TouchableOpacity
+                  style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
+                  onPress={saveWeight}
+                  disabled={savingWeight || !(parseFloat(weightInput) > 0)}
+                  activeOpacity={0.8}
+                >
+                  {savingWeight
+                    ? <ActivityIndicator size="small" color={Colors.white} />
+                    : <Text style={styles.actionBtnText}>Save</Text>}
+                </TouchableOpacity>
+              </View>
             )}
-          </>
-        ) : (
-          <Text style={styles.emptyText}>Log your weight above to start tracking.</Text>
-        )}
-      </View>
+          </View>
+        </View>
 
-    </ScrollView>
+        {/* Today's workouts */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardLabel}>TODAY'S WORKOUTS</Text>
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => setLogModalVisible(true)}
+              activeOpacity={0.8}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="add" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+          {todaySessions.length === 0 ? (
+            <Text style={styles.emptyText}>No workouts logged today.</Text>
+          ) : (
+            todaySessions.map((session, i) => {
+              const exercises = session.exercises || [];
+              const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
+              return (
+                <TouchableOpacity
+                  key={session.id}
+                  ref={ref => { sessionRefs.current[session.id] = ref; }}
+                  style={[styles.sessionRow, i > 0 && styles.sessionRowBorder]}
+                  onPress={() => openSession(session)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.iconBg, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
+                    <Ionicons name="barbell-outline" size={18} color={Colors.indigo} />
+                  </View>
+                  <View style={styles.promptText}>
+                    <Text style={styles.promptTitle} numberOfLines={1}>{session.name}</Text>
+                    <Text style={styles.promptSub} numberOfLines={1}>
+                      {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} · {setCount} set{setCount !== 1 ? 's' : ''}
+                      {exercises.length ? ` · ${exercises.map(ex => ex.name).join(', ')}` : ''}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={Colors.gray} />
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+        {/* Weight progression */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardLabel}>WEIGHT · LAST {WEIGHT_WINDOW_DAYS} DAYS</Text>
+            {weightChange != null && (
+              <Text style={[styles.deltaText, { color: weightChange <= 0 ? Colors.green : Colors.amber }]}>
+                {fmtDelta(kgToDisplay(weightChange, units))} {unit}
+              </Text>
+            )}
+          </View>
+          {latestWeight ? (
+            <>
+              <View style={styles.bigValueRow}>
+                <Text style={styles.bigValue}>{w(latestWeight.weight)}</Text>
+                <Text style={styles.bigUnit}> {unit}</Text>
+                {goalWeight != null && (
+                  <Text style={styles.goalText}>
+                    Goal {w(goalWeight)} {unit} · {w(Math.abs(latestWeight.weight - goalWeight))} to go
+                  </Text>
+                )}
+              </View>
+              {recentWeights.length >= 2 ? (
+                <>
+                  <View style={{ marginTop: 14 }}>
+                    <LineChart
+                      values={recentWeights.map(w => w.weight)}
+                      width={CARD_INNER_W}
+                      height={90}
+                      color={Colors.text}
+                    />
+                  </View>
+                  <View style={styles.chartAxis}>
+                    <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[0].date)}</Text>
+                    <Text style={styles.axisLabel}>{fmtShortDate(recentWeights[recentWeights.length - 1].date)}</Text>
+                  </View>
+                </>
+              ) : (
+                <Text style={styles.emptyText}>Log a few more weigh-ins to see your trend.</Text>
+              )}
+            </>
+          ) : (
+            <Text style={styles.emptyText}>Log your weight above to start tracking.</Text>
+          )}
+        </View>
+
+      </ScrollView>
+
+      <LogWorkoutModal
+        visible={logModalVisible}
+        onClose={() => setLogModalVisible(false)}
+        onSaved={reloadHistory}
+        defaultUnit={unit}
+      />
+
+      <EditWorkoutModal
+        session={editingSession}
+        defaultUnit={unit}
+        onClose={() => setEditingSession(null)}
+        onSaved={async () => { setExpandedCard(null); await reloadHistory(); }}
+      />
+
+      {expandedCard && (
+        <ExpandedSessionCard
+          key={expandedCard.session.id}
+          session={expandedCard.session}
+          rect={expandedCard.rect}
+          containerHeight={containerHeight}
+          onClosed={updated => {
+            setExpandedCard(null);
+            setHistory(prev => prev.map(s => s.id === updated.id ? { ...s, notes: updated.notes } : s));
+          }}
+          onEdit={setEditingSession}
+          onDeleted={id => {
+            setExpandedCard(null);
+            setHistory(prev => prev.filter(s => s.id !== id));
+          }}
+        />
+      )}
+    </View>
   );
 };
 
