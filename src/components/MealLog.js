@@ -116,7 +116,6 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
         <TouchableOpacity style={s.addBtn} onPress={addMeal} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="add" size={20} color={Colors.onPrimary} />
         </TouchableOpacity>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.gray} />
       </TouchableOpacity>
 
       {expanded && (draft.length === 0 ? (

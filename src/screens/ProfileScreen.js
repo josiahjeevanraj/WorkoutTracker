@@ -9,6 +9,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { supabase } from '../services/supabaseClient';
 import { UNIT_OPTIONS, weightUnit } from '../utils/units';
 import WorkoutPlansModal from '../components/workout/WorkoutPlansModal';
+import AvatarCropModal from '../components/AvatarCropModal';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
@@ -31,6 +32,8 @@ const ProfileScreen = () => {
   const [editMessage, setEditMessage] = useState(null); // { text, error }
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState(null);
+  const [cropImage, setCropImage] = useState(null); // { uri, width, height } being cropped
+  const [showAvatarViewer, setShowAvatarViewer] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -85,19 +88,30 @@ const ProfileScreen = () => {
     setShowEditModal(false);
   };
 
+  // Pick without the picker's own crop step (unavailable on web); AvatarCropModal crops
   const pickAvatar = async () => {
     setAvatarError(null);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1,
-    });
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
     if (result.canceled) return;
+    const asset = result.assets[0];
+    let { width, height } = asset;
+    if (!width || !height) {
+      ({ width, height } = await new Promise((resolve, reject) =>
+        Image.getSize(asset.uri, (w, h) => resolve({ width: w, height: h }), reject)));
+    }
+    setCropImage({ uri: asset.uri, width, height });
+  };
 
+  const uploadAvatar = async crop => {
+    const source = cropImage;
+    setCropImage(null);
     setUploadingAvatar(true);
     try {
-      const rendered = await ImageManipulator.manipulate(result.assets[0].uri)
+      const rendered = await ImageManipulator.manipulate(source.uri)
+        .crop(crop)
         .resize({ width: 256, height: 256 })
         .renderAsync();
-      const { base64 } = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG, base64: true });
+      const { base64 } = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG, base64: true });
       const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
 
       const path = `${user.id}/avatar.jpg`;
@@ -159,21 +173,32 @@ const ProfileScreen = () => {
       {/* Hero card */}
       <View style={[s.heroCard, { borderColor: 'rgba(255,230,0,0.2)' }]}>
         <View style={s.heroTop}>
-          <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
-            <View style={s.heroAvatar}>
-              {profile.avatarUrl
-                ? <Image source={{ uri: profile.avatarUrl }} style={s.heroAvatarImg} />
-                : <Text style={s.heroAvatarText}>{initials}</Text>}
-              {uploadingAvatar && (
-                <View style={s.heroAvatarOverlay}>
-                  <ActivityIndicator color="#FFFFFF" />
-                </View>
-              )}
-            </View>
-            <View style={[s.avatarBadge, { borderColor: colors.background }]}>
+          <View>
+            <TouchableOpacity
+              onPress={() => (profile.avatarUrl ? setShowAvatarViewer(true) : pickAvatar())}
+              disabled={uploadingAvatar}
+              activeOpacity={0.8}
+            >
+              <View style={s.heroAvatar}>
+                {profile.avatarUrl
+                  ? <Image source={{ uri: profile.avatarUrl }} style={s.heroAvatarImg} />
+                  : <Text style={s.heroAvatarText}>{initials}</Text>}
+                {uploadingAvatar && (
+                  <View style={s.heroAvatarOverlay}>
+                    <ActivityIndicator color="#FFFFFF" />
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.avatarBadge, { borderColor: colors.background }]}
+              onPress={pickAvatar}
+              disabled={uploadingAvatar}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
               <Ionicons name="camera" size={12} color={colors.onPrimary} />
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          </View>
           <View style={s.heroInfo}>
             <Text style={s.heroName} numberOfLines={1}>{displayName}</Text>
             {profile.name ? <Text style={[s.heroEmail, { color: colors.gray }]} numberOfLines={1}>{email}</Text> : null}
@@ -267,6 +292,29 @@ const ProfileScreen = () => {
         onClose={() => setShowPlansModal(false)}
         defaultUnit={weightUnit(profile.units)}
       />
+
+      <AvatarCropModal image={cropImage} onCancel={() => setCropImage(null)} onConfirm={uploadAvatar} />
+
+      {/* Avatar viewer */}
+      <Modal visible={showAvatarViewer} transparent animationType="fade" onRequestClose={() => setShowAvatarViewer(false)}>
+        <TouchableOpacity style={s.viewerOverlay} activeOpacity={1} onPress={() => setShowAvatarViewer(false)}>
+          {profile.avatarUrl ? (
+            <Image source={{ uri: profile.avatarUrl }} style={s.viewerImage} />
+          ) : null}
+          <View style={s.viewerButtons}>
+            <TouchableOpacity
+              style={[s.viewerBtn, { backgroundColor: colors.primary }]}
+              onPress={() => { setShowAvatarViewer(false); pickAvatar(); }}
+            >
+              <Ionicons name="camera" size={16} color={colors.onPrimary} />
+              <Text style={[s.viewerBtnText, { color: colors.onPrimary }]}>Change photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.viewerBtn, { backgroundColor: colors.darkGray }]} onPress={() => setShowAvatarViewer(false)}>
+              <Text style={[s.viewerBtnText, { color: '#FFFFFF' }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Units modal */}
       <Modal visible={showUnitsModal} transparent animationType="slide" onRequestClose={() => setShowUnitsModal(false)}>
@@ -362,6 +410,13 @@ const s = StyleSheet.create({
     backgroundColor: '#FFE600', justifyContent: 'center', alignItems: 'center',
   },
   heroInfo: { flex: 1 },
+
+  // Avatar viewer
+  viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  viewerImage: { width: 300, height: 300, maxWidth: '100%', borderRadius: 150 },
+  viewerButtons: { flexDirection: 'row', gap: 12, marginTop: 28 },
+  viewerBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12 },
+  viewerBtnText: { fontSize: 15, fontWeight: '700' },
   heroName: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
   heroEmail: { fontSize: 13, marginTop: 2 },
   heroPending: { fontSize: 12, color: '#FBBF24', marginTop: 4 },
