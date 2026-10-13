@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import StorageService from '../services/StorageService';
 import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
+import { useFeature } from '../contexts/FeatureFlagsContext';
+import { isCardio, formatCardioSet } from '../utils/cardio';
 import showAlert from '../utils/showAlert';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,6 +120,8 @@ const SwipeableCalSessionCard = React.memo(({ session, cardRef, onPress, onDupli
 const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSessionDeleted, onLogWorkout }) => {
   const [selectedDate, setSelectedDate] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const weightEnabled = useFeature('weight');
+  const mealsEnabled = useFeature('meals');
   const [editingData, setEditingData] = useState({ caloriesConsumed: '', caloriesBurned: '', weight: '', workouts: [] });
   const [showWorkoutSelector, setShowWorkoutSelector] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState({});
@@ -387,18 +391,18 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
             <Text style={s.dayTitle}>{friendlyDate(selectedDate)}</Text>
             <Text style={s.daySubtitle}>
               {daySessions.length} session{daySessions.length !== 1 ? 's' : ''}
-              {dayData?.weight ? ` · ${dayData.weight} kg` : ''}
+              {weightEnabled && dayData?.weight ? ` · ${dayData.weight} kg` : ''}
             </Text>
           </View>
         </View>
 
         {/* Energy compact row */}
-        {dayData && (dayData.caloriesConsumed > 0 || dayData.caloriesBurned > 0) && (
+        {dayData && ((mealsEnabled && dayData.caloriesConsumed > 0) || dayData.caloriesBurned > 0) && (
           <View style={s.energyCompact}>
             <Ionicons name="flame-outline" size={13} color={Colors.softRed} />
             <Text style={s.energyCompactText}>
-              {dayData.caloriesConsumed > 0 ? `${dayData.caloriesConsumed.toLocaleString()} in` : ''}
-              {dayData.caloriesConsumed > 0 && dayData.caloriesBurned > 0 ? '  ·  ' : ''}
+              {mealsEnabled && dayData.caloriesConsumed > 0 ? `${dayData.caloriesConsumed.toLocaleString()} in` : ''}
+              {mealsEnabled && dayData.caloriesConsumed > 0 && dayData.caloriesBurned > 0 ? '  ·  ' : ''}
               {dayData.caloriesBurned > 0 ? `${dayData.caloriesBurned.toLocaleString()} out` : ''}
             </Text>
           </View>
@@ -468,7 +472,9 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
                         <Text style={s.exName} numberOfLines={1}>{ex.name}</Text>
                         <Text style={s.exMeta}>
                           {Array.isArray(ex.sets)
-                            ? `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}${ex.sets[0].unit || 'kg'}` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
+                            ? isCardio(ex)
+                              ? `${ex.sets.length > 1 ? `${ex.sets.length} sets · ` : ''}${formatCardioSet(ex.sets[0] || {})}`
+                              : `${ex.sets.length} set${ex.sets.length !== 1 ? 's' : ''}${ex.sets[0]?.weight ? ` · ${ex.sets[0].weight}${ex.sets[0].unit || 'kg'}` : ''}${ex.sets[0]?.reps ? ` × ${ex.sets[0].reps}` : ''}`
                             : `${ex.sets}×${ex.reps}${ex.weight && ex.weight !== '-' && ex.weight !== '' ? ` · ${ex.weight}` : ''}`}
                         </Text>
                       </View>
@@ -485,7 +491,9 @@ const CalendarScreen = ({ embedded = false, sessions = [], onEditSession, onSess
         { label: 'Calories Consumed', field: 'caloriesConsumed', placeholder: 'e.g. 2200', keyboard: 'numeric' },
         { label: 'Calories Burned',   field: 'caloriesBurned',   placeholder: 'e.g. 450',  keyboard: 'numeric' },
         { label: 'Weight (kg)',       field: 'weight',           placeholder: 'e.g. 74.2', keyboard: 'decimal-pad' },
-      ].map(({ label, field, placeholder, keyboard }) => (
+      ].filter(({ field }) =>
+        (field !== 'weight' || weightEnabled) && (field !== 'caloriesConsumed' || mealsEnabled)
+      ).map(({ label, field, placeholder, keyboard }) => (
         <View key={field} style={s.inputGroup}>
           <Text style={s.inputLabel}>{label}</Text>
           <TextInput

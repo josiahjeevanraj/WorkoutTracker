@@ -12,6 +12,9 @@ import Svg, {
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
+import { useFeature } from '../contexts/FeatureFlagsContext';
+import { isCardio, isCardioName, distanceUnitFor, cardioTotals, formatPace } from '../utils/cardio';
+import { weightUnit } from '../utils/units';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_W = SCREEN_WIDTH - 72; // card marginH 18 + padding 18 each side
@@ -34,7 +37,7 @@ const toKey = d =>
 // ─── SVG line chart ───────────────────────────────────────────────────────────
 const SVG_H = 110;
 
-const LineChartSVG = ({ data, labels, color = Colors.text, unit = '' }) => {
+const LineChartSVG = ({ data, labels, color = Colors.text, unit = '', format }) => {
   const [selectedPoint, setSelectedPoint] = useState(null);
   useEffect(() => { setSelectedPoint(null); }, [data]);
 
@@ -73,7 +76,7 @@ const LineChartSVG = ({ data, labels, color = Colors.text, unit = '' }) => {
   };
 
   const fmtV = v => v % 1 === 0 ? String(v) : v.toFixed(1);
-  const tooltipLabel = pt => `${fmtV(pt.v)}${unit ? ` ${unit}` : ''}`;
+  const tooltipLabel = pt => `${format ? format(pt.v) : fmtV(pt.v)}${unit ? ` ${unit}` : ''}`;
 
   // Single point: render a dot centred vertically, tappable
   if (nonNullPts.length === 1) {
@@ -287,6 +290,13 @@ const ProgressScreen = () => {
   const [customEndDate, setCustomEndDate] = useState(null);
   const [customPickerVisible, setCustomPickerVisible] = useState(false);
   const [includeWarmupInStats, setIncludeWarmupInStats] = useState(true);
+  // Feature flags: without weight the whole Body view is hidden
+  const weightEnabled = useFeature('weight');
+  const mealsEnabled = useFeature('meals');
+  const view = weightEnabled ? progressType : 'exercise';
+  const [units, setUnits] = useState(null);
+  const distUnit = distanceUnitFor(weightUnit(units));
+  const bodyMetrics = BODY_METRICS.filter(m => mealsEnabled || m.id !== 'caloriesConsumed');
 
   useFocusEffect(useCallback(() => { loadData(); loadProfile(); }, []));
 
@@ -301,6 +311,7 @@ const ProgressScreen = () => {
 
   const loadProfile = async () => {
     const profile = await StorageService.getUserProfile();
+    setUnits(profile?.units || null);
     if (profile) {
       setUserStats({ height: profile.height?.toString() || '', bodyFat: profile.bodyFat?.toString() || '' });
       setGoals({ targetWeight: profile.goalWeight?.toString() || '', targetBodyFat: profile.goalBodyFat?.toString() || '' });
@@ -437,19 +448,41 @@ const ProgressScreen = () => {
   };
 
   // ─── Strength chart data ────────────────────────────────────────────────────
+  // Treadmill/cardio exercises chart time + distance instead of weight
+  const selectedIsCardio = useMemo(() =>
+    isCardioName(selectedExercise) ||
+    workoutHistory.some(s => s.exercises?.some(e => e.name === selectedExercise && isCardio(e))),
+  [selectedExercise, workoutHistory]);
+  const cardioMetrics = [
+    { id: 'distance', label: 'Distance', unit: distUnit,          color: Colors.text },
+    { id: 'duration', label: 'Time',     unit: 'min',             color: Colors.indigo },
+    { id: 'pace',     label: 'Pace',     unit: `/${distUnit}`,    color: Colors.green, lowerIsBetter: true, format: formatPace },
+  ];
+  const exerciseMetrics = selectedIsCardio ? cardioMetrics : STRENGTH_METRICS;
+  const activeStrengthMetric = exerciseMetrics.find(m => m.id === strengthMetric) || exerciseMetrics[0];
+  const fmtMetric = (metric, v) => metric.format ? metric.format(v) : (v % 1 === 0 ? v : v.toFixed(1));
+
   const getStrengthChartData = () => {
     if (!selectedExercise) return { labels: [], data: [] };
+    const metricId = activeStrengthMetric.id;
+    // Best value per bucket: highest, except pace where lower is better
+    const best = vals => (activeStrengthMetric.lowerIsBetter ? Math.min(...vals) : Math.max(...vals));
 
     const sessionPoints = workoutHistory
       .filter(s => s.exercises?.some(e => e.name === selectedExercise))
       .map(s => {
         const ex = s.exercises.find(e => e.name === selectedExercise);
+        if (selectedIsCardio) {
+          const t = cardioTotals(ex, distUnit);
+          return { date: new Date(s.completedAt), value: (metricId === 'pace' ? t.pace : t[metricId]) || 0 };
+        }
         const maxW = ex.sets.reduce((m, set) => Math.max(m, parseFloat(set.weight) || 0), 0);
         const vol = ex.sets.reduce(
           (sum, set) => sum + (parseFloat(set.weight) || 0) * (parseInt(set.reps) || 0), 0
         );
-        return { date: new Date(s.completedAt), value: strengthMetric === 'maxWeight' ? maxW : vol };
-      });
+        return { date: new Date(s.completedAt), value: metricId === 'maxWeight' ? maxW : vol };
+      })
+      .filter(p => p.value > 0);
 
     let filteredData = [];
     let labels = [];
@@ -465,7 +498,7 @@ const ProgressScreen = () => {
           target.setDate(weekStart.getDate() + i);
           const key = toKey(target);
           const pts = sessionPoints.filter(p => toKey(p.date) === key);
-          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+          filteredData.push(pts.length > 0 ? best(pts.map(p => p.value)) : 0);
         }
         break;
       }
@@ -477,7 +510,7 @@ const ProgressScreen = () => {
           const target = new Date(monthDate.getFullYear(), monthDate.getMonth(), i);
           const key = toKey(target);
           const pts = sessionPoints.filter(p => toKey(p.date) === key);
-          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+          filteredData.push(pts.length > 0 ? best(pts.map(p => p.value)) : 0);
         }
         break;
       }
@@ -486,7 +519,7 @@ const ProgressScreen = () => {
         labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         for (let month = 0; month < 12; month++) {
           const pts = sessionPoints.filter(p => p.date.getFullYear() === year && p.date.getMonth() === month);
-          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+          filteredData.push(pts.length > 0 ? best(pts.map(p => p.value)) : 0);
         }
         break;
       }
@@ -501,7 +534,7 @@ const ProgressScreen = () => {
         Object.keys(allMonths).sort().slice(-12).forEach(key => {
           const [year, month] = key.split('-');
           labels.push(`${MONTHS[parseInt(month)]} ${year.slice(-2)}`);
-          filteredData.push(Math.max(...allMonths[key]));
+          filteredData.push(best(allMonths[key]));
         });
         break;
       }
@@ -516,7 +549,7 @@ const ProgressScreen = () => {
           target.setDate(startD.getDate() + i);
           const key = toKey(target);
           const pts = sessionPoints.filter(p => toKey(p.date) === key);
-          filteredData.push(pts.length > 0 ? Math.max(...pts.map(p => p.value)) : 0);
+          filteredData.push(pts.length > 0 ? best(pts.map(p => p.value)) : 0);
           if (i === 0 || i % labelEvery === 0) labels.push(`${target.getMonth() + 1}/${target.getDate()}`);
         }
         break;
@@ -585,8 +618,7 @@ const ProgressScreen = () => {
   const bodyChart = getBodyChartData();
   const strChart = getStrengthChartData();
 
-  const activeBodyMetric = BODY_METRICS.find(m => m.id === selectedMetric);
-  const activeStrengthMetric = STRENGTH_METRICS.find(m => m.id === strengthMetric);
+  const activeBodyMetric = bodyMetrics.find(m => m.id === selectedMetric);
 
   const bodyBigNum = getBigNumber(bodyChart.data);
   const bodyTrend = getTrend(bodyChart.data);
@@ -610,18 +642,20 @@ const ProgressScreen = () => {
   };
 
   // Best ever set for selected exercise
+  // (cardio: longest distance in one session, in distUnit)
   const personalBest = useMemo(() => {
     if (!selectedExercise) return null;
     let best = 0;
     workoutHistory.forEach(s => {
       s.exercises?.forEach(e => {
         if (e.name === selectedExercise) {
-          e.sets.forEach(set => { best = Math.max(best, parseFloat(set.weight) || 0); });
+          if (selectedIsCardio) best = Math.max(best, cardioTotals(e, distUnit).distance);
+          else e.sets.forEach(set => { best = Math.max(best, parseFloat(set.weight) || 0); });
         }
       });
     });
-    return best > 0 ? best : null;
-  }, [workoutHistory, selectedExercise]);
+    return best > 0 ? Math.round(best * 100) / 100 : null;
+  }, [workoutHistory, selectedExercise, selectedIsCardio, distUnit]);
 
   // Sessions for the currently selected period (used for Stats card)
   const rangeSessionsForStats = useMemo(() => {
@@ -664,6 +698,16 @@ const ProgressScreen = () => {
   // Stats summary for the selected period + exercise
   const exerciseStats = useMemo(() => {
     if (!selectedExercise || rangeSessionsForStats.length === 0) return null;
+    if (selectedIsCardio) {
+      let distance = 0, duration = 0, bestPace = null;
+      rangeSessionsForStats.forEach(s => {
+        const t = cardioTotals(s.exercises.find(e => e.name === selectedExercise), distUnit);
+        distance += t.distance;
+        duration += t.duration;
+        if (t.pace && (bestPace === null || t.pace < bestPace)) bestPace = t.pace;
+      });
+      return { cardio: true, totalSessions: rangeSessionsForStats.length, distance, duration, bestPace };
+    }
     let totalSets = 0;
     rangeSessionsForStats.forEach(s => {
       s.exercises?.forEach(e => {
@@ -682,7 +726,7 @@ const ProgressScreen = () => {
       if (firstMax > 0) pctImprovement = ((lastMax - firstMax) / firstMax) * 100;
     }
     return { totalSessions: rangeSessionsForStats.length, totalSets, pb: personalBest, pctImprovement };
-  }, [selectedExercise, rangeSessionsForStats, includeWarmupInStats, personalBest]);
+  }, [selectedExercise, rangeSessionsForStats, includeWarmupInStats, personalBest, selectedIsCardio, distUnit]);
 
   // Sessions in the selected period for the recent sessions list
   const recentStrengthSessions = useMemo(() => {
@@ -702,6 +746,7 @@ const ProgressScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Progress</Text>
+        {weightEnabled && (
         <View style={styles.typePill}>
           {['body', 'exercise'].map(type => (
             <TouchableOpacity
@@ -715,10 +760,11 @@ const ProgressScreen = () => {
             </TouchableOpacity>
           ))}
         </View>
+        )}
       </View>
 
       {/* ── BODY METRICS ─────────────────────────────────────────────────── */}
-      {progressType === 'body' && (
+      {view === 'body' && (
         <>
           <ScrollView
             horizontal
@@ -726,7 +772,7 @@ const ProgressScreen = () => {
             style={styles.pillScroll}
             contentContainerStyle={styles.pillScrollContent}
           >
-            {BODY_METRICS.map(m => (
+            {bodyMetrics.map(m => (
               <TouchableOpacity
                 key={m.id}
                 style={[styles.metricPill, selectedMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
@@ -867,12 +913,12 @@ const ProgressScreen = () => {
       )}
 
       {/* ── EXERCISE PROGRESS ────────────────────────────────────────────── */}
-      {progressType === 'exercise' && (
+      {view === 'exercise' && (
         <>
           <TouchableOpacity style={styles.exercisePicker} onPress={() => setExerciseModalVisible(true)}>
             <View style={styles.exercisePickerLeft}>
               <View style={[styles.exercisePickerIcon, { backgroundColor: selectedExercise ? 'rgba(255,255,255,0.08)' : 'rgba(107,114,128,0.15)' }]}>
-                <Ionicons name="barbell-outline" size={18} color={selectedExercise ? Colors.text : Colors.gray} />
+                <Ionicons name={selectedIsCardio ? 'walk-outline' : 'barbell-outline'} size={18} color={selectedExercise ? Colors.text : Colors.gray} />
               </View>
               <Text style={[styles.exercisePickerText, !selectedExercise && { color: Colors.gray }]}>
                 {selectedExercise || 'Select an exercise'}
@@ -886,13 +932,13 @@ const ProgressScreen = () => {
               {/* Strength metric pills */}
               <View style={[styles.pillScroll, { marginBottom: 12 }]}>
                 <View style={[styles.pillScrollContent, { flexDirection: 'row', gap: 10 }]}>
-                  {STRENGTH_METRICS.map(m => (
+                  {exerciseMetrics.map(m => (
                     <TouchableOpacity
                       key={m.id}
-                      style={[styles.metricPill, strengthMetric === m.id && { backgroundColor: m.color, borderColor: m.color }]}
+                      style={[styles.metricPill, activeStrengthMetric.id === m.id && { backgroundColor: m.color, borderColor: m.color }]}
                       onPress={() => setStrengthMetric(m.id)}
                     >
-                      <Text style={[styles.metricPillText, strengthMetric === m.id && styles.metricPillTextActive, strengthMetric === m.id && m.color === Colors.primary && { color: Colors.onPrimary }]}>
+                      <Text style={[styles.metricPillText, activeStrengthMetric.id === m.id && styles.metricPillTextActive, activeStrengthMetric.id === m.id && m.color === Colors.primary && { color: Colors.onPrimary }]}>
                         {m.label}
                       </Text>
                     </TouchableOpacity>
@@ -924,7 +970,7 @@ const ProgressScreen = () => {
                       {strBigNum !== null ? (
                         <>
                           <Text style={[styles.chartCardBigValue, { color: activeStrengthMetric.color }]}>
-                            {strBigNum % 1 === 0 ? strBigNum : strBigNum.toFixed(1)}
+                            {fmtMetric(activeStrengthMetric, strBigNum)}
                           </Text>
                           <Text style={styles.chartCardUnit}> {activeStrengthMetric.unit}</Text>
                         </>
@@ -934,21 +980,25 @@ const ProgressScreen = () => {
                     </View>
                   </View>
                   <View style={styles.pbBadge}>
-                    <Text style={styles.pbLabel}>PB</Text>
-                    <Text style={styles.pbValue}>{personalBest !== null ? `${personalBest} kg` : '—'}</Text>
+                    <Text style={styles.pbLabel}>{selectedIsCardio ? 'LONGEST' : 'PB'}</Text>
+                    <Text style={styles.pbValue}>{personalBest !== null ? `${personalBest} ${selectedIsCardio ? distUnit : 'kg'}` : '—'}</Text>
                   </View>
-                  {strTrend !== null && (
-                    <View style={[styles.trendBadge, { backgroundColor: strTrend >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
+                  {strTrend !== null && (() => {
+                    // For pace a falling number is an improvement
+                    const good = activeStrengthMetric.lowerIsBetter ? strTrend <= 0 : strTrend >= 0;
+                    return (
+                    <View style={[styles.trendBadge, { backgroundColor: good ? 'rgba(52,211,153,0.12)' : 'rgba(248,113,113,0.12)' }]}>
                       <Ionicons
                         name={strTrend >= 0 ? 'trending-up' : 'trending-down'}
                         size={12}
-                        color={strTrend >= 0 ? Colors.green : Colors.softRed}
+                        color={good ? Colors.green : Colors.softRed}
                       />
-                      <Text style={[styles.trendText, { color: strTrend >= 0 ? Colors.green : Colors.softRed }]}>
+                      <Text style={[styles.trendText, { color: good ? Colors.green : Colors.softRed }]}>
                         {' '}{strTrend >= 0 ? '+' : ''}{strTrend.toFixed(1)}%
                       </Text>
                     </View>
-                  )}
+                    );
+                  })()}
                 </View>
 
                 {timeView !== 'allTime' && timeView !== 'custom' && (
@@ -981,7 +1031,7 @@ const ProgressScreen = () => {
                   </TouchableOpacity>
                 )}
 
-                <LineChartSVG data={strChart.data} labels={strChart.labels} color={activeStrengthMetric.color} unit={activeStrengthMetric.unit} />
+                <LineChartSVG data={strChart.data} labels={strChart.labels} color={activeStrengthMetric.color} unit={activeStrengthMetric.unit} format={activeStrengthMetric.format} />
               </View>
 
               {/* Stats summary for selected period */}
@@ -989,6 +1039,7 @@ const ProgressScreen = () => {
                 <View style={styles.statsCard}>
                   <View style={styles.statsCardHeader}>
                     <Text style={styles.statsCardTitle}>STATS · {getPeriodLabel().toUpperCase()}</Text>
+                    {!exerciseStats.cardio && (
                     <TouchableOpacity
                       style={styles.warmupToggleRow}
                       onPress={() => setIncludeWarmupInStats(v => !v)}
@@ -998,7 +1049,28 @@ const ProgressScreen = () => {
                         <View style={[styles.toggleThumb, includeWarmupInStats && styles.toggleThumbActive]} />
                       </View>
                     </TouchableOpacity>
+                    )}
                   </View>
+                  {exerciseStats.cardio ? (
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Sessions</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.totalSessions}</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Distance</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.distance.toFixed(1)} {distUnit}</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Time</Text>
+                      <Text style={styles.statItemValue}>{Math.round(exerciseStats.duration)} min</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                      <Text style={styles.statItemLabel}>Best pace</Text>
+                      <Text style={styles.statItemValue}>{exerciseStats.bestPace ? `${formatPace(exerciseStats.bestPace)}/${distUnit}` : '—'}</Text>
+                    </View>
+                  </View>
+                  ) : (
                   <View style={styles.statsRow}>
                     <View style={styles.statItem}>
                       <Text style={styles.statItemLabel}>Sessions</Text>
@@ -1026,6 +1098,7 @@ const ProgressScreen = () => {
                       </Text>
                     </View>
                   </View>
+                  )}
                 </View>
               )}
 
@@ -1053,6 +1126,28 @@ const ProgressScreen = () => {
                   {sessionsExpanded && recentStrengthSessions.map((item, idx) => (
                     <View key={idx} style={styles.sessionCard}>
                       <Text style={styles.sessionDate}>{friendlyDate(item.date)}</Text>
+                      {selectedIsCardio ? (
+                        <>
+                          <View style={styles.setsHeader}>
+                            <Text style={styles.setCol}>Set</Text>
+                            <Text style={styles.setCol}>Time</Text>
+                            <Text style={styles.setCol}>Distance</Text>
+                            <Text style={styles.setCol}>Pace</Text>
+                          </View>
+                          {item.sets.map((set, si) => {
+                            const t = cardioTotals({ sets: [set] }, distUnit);
+                            return (
+                              <View key={si} style={styles.setRow}>
+                                <Text style={styles.setCell}>{si + 1}</Text>
+                                <Text style={styles.setCell}>{t.duration ? `${t.duration} min` : '—'}</Text>
+                                <Text style={styles.setCell}>{t.distance ? `${t.distance.toFixed(2)} ${distUnit}` : '—'}</Text>
+                                <Text style={styles.setCell}>{t.pace ? formatPace(t.pace) : '—'}</Text>
+                              </View>
+                            );
+                          })}
+                        </>
+                      ) : (
+                      <>
                       <View style={styles.setsHeader}>
                         <Text style={styles.setCol}>Set</Text>
                         <Text style={styles.setCol}>Weight</Text>
@@ -1071,6 +1166,8 @@ const ProgressScreen = () => {
                           </View>
                         );
                       })}
+                      </>
+                      )}
                     </View>
                   ))}
                 </>

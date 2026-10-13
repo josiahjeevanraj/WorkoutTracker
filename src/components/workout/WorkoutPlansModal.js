@@ -8,13 +8,14 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor from './ExerciseEditor';
+import { isCardio, distanceUnitFor } from '../../utils/cardio';
 import styles from './workoutStyles';
 
 // Plans are stored under @workouts: { id, name, createdAt, exercises: [{ name, sets }] }
 export const planToEditorExercises = (plan, defaultUnit) =>
   (plan.exercises || []).map((ex, i) => ({
     ...ex,
-    sets: (ex.sets || []).map(s => ({ ...s, unit: s.unit || defaultUnit })),
+    sets: (ex.sets || []).map(s => ({ ...s, unit: s.unit || (isCardio(ex) ? distanceUnitFor(defaultUnit) : defaultUnit) })),
     _key: `${Date.now()}-${i}`,
   }));
 

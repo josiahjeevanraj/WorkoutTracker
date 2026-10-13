@@ -150,3 +150,12 @@ export const EXERCISE_LIST = [
   "Battle Ropes",
   "Box Jump",
 ];
+
+// Treadmill / cardio exercises: sets are logged as time + distance instead of weight × reps
+export const CARDIO_EXERCISES = [
+  "Treadmill Walk",
+  "Treadmill Incline Walk",
+  "Treadmill Jog",
+  "Treadmill Run",
+  "Treadmill Sprint Intervals",
+];

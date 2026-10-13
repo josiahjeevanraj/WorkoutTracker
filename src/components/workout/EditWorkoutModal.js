@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
-import ExerciseEditor, { cleanExercises, hasEmptyReps } from './ExerciseEditor';
+import ExerciseEditor, { cleanExercises, hasEmptyReps, MISSING_SET_DETAILS } from './ExerciseEditor';
 import styles from './workoutStyles';
 
 // Visible while `session` is set; onClose always fires, onSaved only after a successful save
@@ -21,7 +21,7 @@ const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => 
 
   const handleSave = async () => {
     const named = (edited.exercises || []).filter(ex => ex.name?.trim());
-    if (hasEmptyReps(named)) { showAlert('Missing reps', 'Please enter reps for all sets before saving.'); return; }
+    if (hasEmptyReps(named)) { showAlert(...MISSING_SET_DETAILS); return; }
     const clean = cleanExercises(edited.exercises || []);
     const updates = { name: edited.name?.trim() || session.name, exercises: clean, exerciseCount: clean.length, notes: edited.notes ?? '' };
     const updated = await StorageService.updateWorkoutSession(edited.id, updates);

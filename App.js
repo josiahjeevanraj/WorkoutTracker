@@ -8,10 +8,13 @@ import AuthScreen from './src/screens/AuthScreen';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import UpdateBanner from './src/components/UpdateBanner';
+import { FeatureFlagsProvider, useFeatureFlagsReady } from './src/contexts/FeatureFlagsContext';
 
 const Root = () => {
   const { session, loading } = useAuth();
-  if (loading) return null;
+  const flagsReady = useFeatureFlagsReady();
+  // Wait for flags so disabled features don't flash in before hiding
+  if (loading || (session && !flagsReady)) return null;
   return session ? <AppNavigator /> : <AuthScreen />;
 };
 
@@ -20,13 +23,15 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <ThemeProvider>
-            <StatusBar style="auto" />
-            <View style={{ flex: 1 }}>
-              <Root />
-              <UpdateBanner />
-            </View>
-          </ThemeProvider>
+          <FeatureFlagsProvider>
+            <ThemeProvider>
+              <StatusBar style="auto" />
+              <View style={{ flex: 1 }}>
+                <Root />
+                <UpdateBanner />
+              </View>
+            </ThemeProvider>
+          </FeatureFlagsProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

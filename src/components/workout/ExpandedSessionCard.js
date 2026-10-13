@@ -8,6 +8,7 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import DayPicker from './DayPicker';
+import { isCardio, formatCardioSet } from '../../utils/cardio';
 import styles from './workoutStyles';
 
 const toKey = d =>
@@ -142,7 +143,9 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                       <Text style={[styles.expandSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
                     </View>
                     <Text style={styles.expandSetMeta}>
-                      {set.weight ? `${set.weight}${set.unit || 'kg'}` : 'BW'}{set.reps ? ` × ${set.reps}` : ''}
+                      {isCardio(ex)
+                        ? formatCardioSet(set)
+                        : `${set.weight && set.weight !== '0' ? `${set.weight}${set.unit || 'kg'}` : 'BW'}${set.reps ? ` × ${set.reps}` : ''}`}
                     </Text>
                   </View>
                 ))}

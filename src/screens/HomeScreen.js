@@ -13,6 +13,7 @@ import EditWorkoutModal from '../components/workout/EditWorkoutModal';
 import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 import MealLog from '../components/MealLog';
 import DayPicker from '../components/workout/DayPicker';
+import { useFeature } from '../contexts/FeatureFlagsContext';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -69,6 +70,8 @@ const HomeScreen = () => {
   const [editingWeight, setEditingWeight] = useState(false);
   const [selectedKey, setSelectedKey] = useState(() => toKey(new Date()));
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
+  const weightEnabled = useFeature('weight');
+  const mealsEnabled = useFeature('meals');
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
@@ -192,76 +195,80 @@ const HomeScreen = () => {
         </View>
 
         {/* Weight */}
-        <View style={styles.card}>
-          <View style={[styles.promptRow, { marginTop: 0 }]}>
-            <View style={[styles.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
-              <Ionicons name="scale-outline" size={18} color={Colors.text} />
-            </View>
-            <View style={styles.promptText}>
-              <Text style={styles.promptTitle}>Weight</Text>
-              <Text style={styles.promptSub}>
-                {dayWeight != null
-                  ? `${w(dayWeight)} ${unit} logged${isToday ? ' today' : ''}`
-                  : priorWeight
-                    ? `Last: ${w(priorWeight.weight)} ${unit}, ${fmtAgo(priorWeight.date, todayKey)}`
-                    : 'No weight logged yet'}
-              </Text>
-            </View>
-            {dayWeight != null && !editingWeight ? (
-              <TouchableOpacity
-                style={styles.editIconBtn}
-                onPress={() => { setWeightInput(w(dayWeight)); setEditingWeight(true); }}
-                activeOpacity={0.7}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="pencil" size={16} color={Colors.text} />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.weightInputRow}>
-                {editingWeight && (
-                  <TouchableOpacity
-                    onPress={() => { setEditingWeight(false); setWeightInput(''); }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="close" size={20} color={Colors.gray} />
-                  </TouchableOpacity>
-                )}
-                <TextInput
-                  style={styles.weightInput}
-                  value={weightInput}
-                  onChangeText={setWeightInput}
-                  placeholder={priorWeight ? w(priorWeight.weight) : unit}
-                  placeholderTextColor={Colors.gray}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  onSubmitEditing={saveWeight}
-                  autoFocus={editingWeight}
-                  selectTextOnFocus
-                />
-                <TouchableOpacity
-                  style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
-                  onPress={saveWeight}
-                  disabled={savingWeight || !(parseFloat(weightInput) > 0)}
-                  activeOpacity={0.8}
-                >
-                  {savingWeight
-                    ? <ActivityIndicator size="small" color={Colors.onPrimary} />
-                    : <Text style={styles.actionBtnText}>Save</Text>}
-                </TouchableOpacity>
+        {weightEnabled && (
+          <View style={styles.card}>
+            <View style={[styles.promptRow, { marginTop: 0 }]}>
+              <View style={[styles.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
+                <Ionicons name="scale-outline" size={18} color={Colors.text} />
               </View>
-            )}
-          </View>
+              <View style={styles.promptText}>
+                <Text style={styles.promptTitle}>Weight</Text>
+                <Text style={styles.promptSub}>
+                  {dayWeight != null
+                    ? `${w(dayWeight)} ${unit} logged${isToday ? ' today' : ''}`
+                    : priorWeight
+                      ? `Last: ${w(priorWeight.weight)} ${unit}, ${fmtAgo(priorWeight.date, todayKey)}`
+                      : 'No weight logged yet'}
+                </Text>
+              </View>
+              {dayWeight != null && !editingWeight ? (
+                <TouchableOpacity
+                  style={styles.editIconBtn}
+                  onPress={() => { setWeightInput(w(dayWeight)); setEditingWeight(true); }}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="pencil" size={16} color={Colors.text} />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.weightInputRow}>
+                  {editingWeight && (
+                    <TouchableOpacity
+                      onPress={() => { setEditingWeight(false); setWeightInput(''); }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close" size={20} color={Colors.gray} />
+                    </TouchableOpacity>
+                  )}
+                  <TextInput
+                    style={styles.weightInput}
+                    value={weightInput}
+                    onChangeText={setWeightInput}
+                    placeholder={priorWeight ? w(priorWeight.weight) : unit}
+                    placeholderTextColor={Colors.gray}
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    onSubmitEditing={saveWeight}
+                    autoFocus={editingWeight}
+                    selectTextOnFocus
+                  />
+                  <TouchableOpacity
+                    style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
+                    onPress={saveWeight}
+                    disabled={savingWeight || !(parseFloat(weightInput) > 0)}
+                    activeOpacity={0.8}
+                  >
+                    {savingWeight
+                      ? <ActivityIndicator size="small" color={Colors.onPrimary} />
+                      : <Text style={styles.actionBtnText}>Save</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
 
-        </View>
+          </View>
+        )}
 
         {/* Meals */}
-        <View style={styles.card}>
-          <MealLog
-            dayKey={selectedKey}
-            dayData={fitnessData[selectedKey]}
-            onSaved={setFitnessData}
-          />
-        </View>
+        {mealsEnabled && (
+          <View style={styles.card}>
+            <MealLog
+              dayKey={selectedKey}
+              dayData={fitnessData[selectedKey]}
+              onSaved={setFitnessData}
+            />
+          </View>
+        )}
 
         {/* Workouts for the selected day */}
         <View style={styles.card}>
