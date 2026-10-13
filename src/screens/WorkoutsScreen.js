@@ -280,6 +280,7 @@ const WorkoutsScreen = () => {
           }}
           onEdit={setEditingSession}
           onCopied={loadHistory}
+          weightUnit={defaultUnit}
           onDeleted={id => {
             setExpandedCard(null);
             setHistory(prev => prev.filter(s => s.id !== id));

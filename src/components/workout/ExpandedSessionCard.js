@@ -8,6 +8,7 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import DayPicker from './DayPicker';
+import StoryShare from './StoryShare';
 import { isCardio, formatCardioSet } from '../../utils/cardio';
 import styles from './workoutStyles';
 
@@ -19,12 +20,13 @@ const formatTime = iso =>
 
 // Full-screen hero that grows out of the tapped card. Rendered in a Modal so it
 // fills the window regardless of the parent's layout (rect: page position from measure()).
-const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCopied }) => {
+const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCopied, weightUnit = 'kg' }) => {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const anim = useRef(new Animated.Value(0)).current;
   const [notes, setNotes] = useState(session.notes || '');
   const notesRef = useRef(session.notes || '');
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const copyingRef = useRef(false);
 
   useEffect(() => {
@@ -115,6 +117,12 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
               </Text>
               <Text style={styles.expandName}>{session.name}</Text>
             </View>
+            {/* Story image sharing uses the browser's canvas + share sheet (web only for now) */}
+            {Platform.OS === 'web' && (
+              <TouchableOpacity onPress={() => setShareOpen(true)} style={styles.expandCloseBtn}>
+                <Ionicons name="share-outline" size={18} color={Colors.text} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={close} style={styles.expandCloseBtn}>
               <Ionicons name="close" size={20} color={Colors.gray} />
             </TouchableOpacity>
@@ -182,6 +190,10 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
           </View>
         </Animated.View>
       </Animated.View>
+
+      {shareOpen && (
+        <StoryShare session={{ ...session, notes: notesRef.current }} weightUnit={weightUnit} onClose={() => setShareOpen(false)} />
+      )}
 
       {copyPickerOpen && (
         <DayPicker

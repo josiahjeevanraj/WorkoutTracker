@@ -449,6 +449,7 @@ const HomeScreen = () => {
           }}
           onEdit={setEditingSession}
           onCopied={reloadHistory}
+          weightUnit={unit}
           onDeleted={id => {
             setExpandedCard(null);
             setHistory(prev => prev.filter(s => s.id !== id));
