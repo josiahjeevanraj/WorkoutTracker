@@ -211,7 +211,7 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
   ctx.fill();
   ctx.fillStyle = Colors.textSecondary;
   ctx.font = `600 36px ${FONT}`;
-  ctx.fillText('Logged with Workout Tracker', PAD, footerTop + 36);
+  ctx.fillText('Logged with Motion', PAD, footerTop + 36);
 
   return new Promise((resolve, reject) =>
     canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Could not create image'))), 'image/png'));
