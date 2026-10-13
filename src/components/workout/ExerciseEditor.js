@@ -11,9 +11,10 @@ import styles from './workoutStyles';
 
 const newStrengthSet = unit => ({ reps: '', weight: '', warmup: false, unit });
 
-export const newExercise = defaultUnit => ({
-  name: '', sets: [newStrengthSet(defaultUnit)], _key: Date.now().toString(),
-});
+// mode 'cardio' starts the exercise with time/distance rows
+export const newExercise = (defaultUnit, mode) => (mode === 'cardio'
+  ? { name: '', type: 'cardio', sets: [newCardioSet(distanceUnitFor(defaultUnit))], _key: Date.now().toString() }
+  : { name: '', sets: [newStrengthSet(defaultUnit)], _key: Date.now().toString() });
 
 // Swipe actions shared by strength and cardio set rows
 const SetSwipeable = ({ children, exKey, si, canDelete, onDuplicate, onRemove }) => {
@@ -141,15 +142,16 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
 
 // ─── Exercise editor ──────────────────────────────────────────────────────────
 
-// `onChange` receives an updater (exercises => exercises), like a state setter
-const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
+// `onChange` receives an updater (exercises => exercises), like a state setter.
+// `mode` ('strength' | 'cardio', optional) limits the picker to that kind of exercise.
+const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
   const [pickerKey, setPickerKey] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
 
   const updateExercise = (key, field, value) =>
     onChange(list => list.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeExercise = key => onChange(list => list.filter(ex => ex._key !== key));
-  const addExercise = () => onChange(list => [...list, newExercise(defaultUnit)]);
+  const addExercise = () => onChange(list => [...list, newExercise(defaultUnit, mode)]);
 
   const updateSets = (exKey, fn) =>
     onChange(list => list.map(ex => ex._key === exKey ? { ...ex, sets: fn(ex.sets) } : ex));
@@ -168,12 +170,22 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
   const removeSet = (exKey, setIdx) =>
     updateSets(exKey, sets => sets.filter((_, i) => i !== setIdx));
 
-  // The user's own exercises first, then the built-in list
+  // The user's own exercises first, then the built-in list (filtered by mode)
   const customExercises = useCustomExercises();
+  const customCardio = useMemo(
+    () => new Set(customExercises.filter(e => e.type === 'cardio').map(e => e.name.toLowerCase())),
+    [customExercises]);
   const allExercises = useMemo(() => {
-    const builtIn = new Set(EXERCISE_LIST.map(n => n.toLowerCase()));
-    return [...customExercises.filter(n => !builtIn.has(n.toLowerCase())), ...EXERCISE_LIST, ...CARDIO_EXERCISES];
-  }, [customExercises]);
+    const builtIn = new Set([...EXERCISE_LIST, ...CARDIO_EXERCISES].map(n => n.toLowerCase()));
+    const custom = customExercises
+      .filter(e => !builtIn.has(e.name.toLowerCase()))
+      .filter(e => !mode || (mode === 'cardio') === (e.type === 'cardio'))
+      .map(e => e.name);
+    const builtInForMode = mode === 'cardio' ? CARDIO_EXERCISES
+      : mode === 'strength' ? EXERCISE_LIST
+      : [...EXERCISE_LIST, ...CARDIO_EXERCISES];
+    return [...custom, ...builtInForMode];
+  }, [customExercises, mode]);
 
   const query = pickerSearch.trim();
   const pickerResults = query
@@ -182,8 +194,8 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
   const canAddCustom = !!query && !allExercises.some(n => n.toLowerCase() === query.toLowerCase());
 
   // Picking switches the set rows when moving between strength and cardio
-  const pickExercise = (exKey, name) => {
-    const cardio = isCardioName(name);
+  const pickExercise = (exKey, name, type) => {
+    const cardio = type ? type === 'cardio' : isCardioName(name) || customCardio.has(name.toLowerCase());
     onChange(list => list.map(ex => {
       if (ex._key !== exKey) return ex;
       const { type, ...rest } = ex;
@@ -193,9 +205,12 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit }) => {
     }));
     setPickerKey(null);
   };
+  // Exercises added in cardio mode are saved as cardio (time + distance)
   const addAndPick = async (exKey, name) => {
-    pickExercise(exKey, name);
-    if (!(await addCustomExercise(name))) {
+    const type = mode === 'cardio' ? 'cardio' : 'strength';
+    const saving = addCustomExercise(name, type);
+    pickExercise(exKey, name, type);
+    if (!(await saving)) {
       showAlert('Not saved to your list', `"${name}" is used here but couldn't be saved for future picking.`);
     }
   };

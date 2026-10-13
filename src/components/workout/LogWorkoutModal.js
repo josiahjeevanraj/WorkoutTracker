@@ -7,10 +7,12 @@ import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor, { cleanExercises, hasEmptyReps, MISSING_SET_DETAILS } from './ExerciseEditor';
 import { planToEditorExercises } from './WorkoutPlansModal';
+import { isCardio } from '../../utils/cardio';
 import styles from './workoutStyles';
 
 // targetDate: optional 'YYYY-MM-DD' to log against a past day (from the calendar)
-const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 'kg' }) => {
+// mode: optional 'strength' | 'cardio' (Home's toggle) limits exercises and plans
+const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 'kg', mode, accent = Colors.primary, onAccent = Colors.onPrimary }) => {
   const [name, setName] = useState('');
   const [exercises, setExercises] = useState([]);
   const [notes, setNotes] = useState('');
@@ -21,8 +23,12 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const [planId, setPlanId] = useState(null);
 
   useEffect(() => {
-    if (visible) StorageService.getWorkouts().then(p => setPlans(p || [])).catch(console.error);
-  }, [visible]);
+    if (!visible) return;
+    StorageService.getWorkouts()
+      .then(p => setPlans((p || []).filter(plan =>
+        !mode || (plan.exercises || []).some(ex => isCardio(ex) === (mode === 'cardio')))))
+      .catch(console.error);
+  }, [visible, mode]);
 
   const applyPlan = plan => {
     setPlanId(plan.id);
@@ -58,7 +64,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
     <Modal visible={visible} animationType="fade" transparent onRequestClose={close}>
       <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.logModal}>
-          <Text style={styles.modalTitle}>Log Workout</Text>
+          <Text style={styles.modalTitle}>{mode === 'cardio' ? 'Log Cardio' : 'Log Workout'}</Text>
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
             {plans.length > 0 && (
@@ -68,11 +74,11 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
                   {plans.map(plan => (
                     <TouchableOpacity
                       key={plan.id}
-                      style={[styles.planChip, planId === plan.id && styles.planChipActive]}
+                      style={[styles.planChip, planId === plan.id && { backgroundColor: accent, borderColor: accent }]}
                       onPress={() => applyPlan(plan)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.planChipText, planId === plan.id && styles.planChipTextActive]}>{plan.name}</Text>
+                      <Text style={[styles.planChipText, planId === plan.id && { color: onAccent }]}>{plan.name}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -84,12 +90,12 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
               style={styles.sessionNameInput}
               value={name}
               onChangeText={setName}
-              placeholder="e.g. Chest Day, Leg Day..."
+                            placeholder={mode === 'cardio' ? 'e.g. Morning Run, Treadmill...' : 'e.g. Chest Day, Leg Day...'}
               placeholderTextColor={Colors.gray}
             />
 
             <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} />
+            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} />
 
             <View style={styles.logNotesGroup}>
               <Text style={styles.logSectionLabel}>Notes</Text>
@@ -109,8 +115,8 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
               <TouchableOpacity style={[styles.modalButton, styles.cancelBtn]} onPress={close}>
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleLog} disabled={saving}>
-                <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Log'}</Text>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: accent }, saving && { opacity: 0.6 }]} onPress={handleLog} disabled={saving}>
+                <Text style={[styles.saveBtnText, { color: onAccent }]}>{saving ? 'Saving…' : 'Log'}</Text>
               </TouchableOpacity>
             </View>
 

@@ -112,7 +112,5 @@ export default StyleSheet.create({
   planDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
   planChipRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
   planChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
-  planChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   planChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  planChipTextActive: { color: Colors.onPrimary },
 });

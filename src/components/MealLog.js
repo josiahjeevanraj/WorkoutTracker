@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import StorageService from '../services/StorageService';
@@ -21,7 +21,13 @@ const num = v => {
 
 const AUTOSAVE_DELAY_MS = 800;
 
-const MealLog = ({ dayKey, dayData, onSaved }) => {
+// Colours follow Home's lifting/cardio mode: `accent`/`onAccent` are plain colours (icons);
+// `accentFill`/`accentTint` may be Animated colour values (backgrounds fade between modes)
+const MealLog = ({
+  dayKey, dayData, onSaved,
+  accent = Colors.text, onAccent = Colors.onPrimary,
+  accentFill = Colors.primary, accentTint = 'rgba(255,230,0,0.12)',
+}) => {
   const [draft, setDraft] = useState(() => toDraft(dayData?.meals));
   const [expanded, setExpanded] = useState(false);
   const [savingCount, setSavingCount] = useState(0);
@@ -103,9 +109,9 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
   return (
     <View>
       <TouchableOpacity style={s.headerRow} onPress={() => setExpanded(e => !e)} activeOpacity={0.7}>
-        <View style={[s.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
-          <Ionicons name="restaurant-outline" size={18} color={Colors.text} />
-        </View>
+        <Animated.View style={[s.iconBg, { backgroundColor: accentTint }]}>
+          <Ionicons name="restaurant-outline" size={18} color={accent} />
+        </Animated.View>
         <View style={{ flex: 1 }}>
           <Text style={s.title}>Meals</Text>
           <Text style={s.sub}>
@@ -113,8 +119,10 @@ const MealLog = ({ dayKey, dayData, onSaved }) => {
             {savingCount > 0 ? '  · Saving…' : ''}
           </Text>
         </View>
-        <TouchableOpacity style={s.addBtn} onPress={addMeal} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="add" size={20} color={Colors.onPrimary} />
+        <TouchableOpacity onPress={addMeal} activeOpacity={0.8} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Animated.View style={[s.addBtn, { backgroundColor: accentFill }]}>
+            <Ionicons name="add" size={20} color={onAccent} />
+          </Animated.View>
         </TouchableOpacity>
       </TouchableOpacity>
 
@@ -192,7 +200,7 @@ const s = StyleSheet.create({
   gUnit: { fontSize: 12, color: Colors.gray },
   removeCol: { width: 20, alignItems: 'center' },
 
-  addBtn: { width: 30, height: 30, borderRadius: 999, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  addBtn: { width: 30, height: 30, borderRadius: 999, justifyContent: 'center', alignItems: 'center' },
   emptyText: { fontSize: 13, color: Colors.gray, marginTop: 12 },
 });
 

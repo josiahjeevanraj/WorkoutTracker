@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Keyboard, Modal,
+  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../services/StorageService';
@@ -14,6 +15,7 @@ import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 import MealLog from '../components/MealLog';
 import DayPicker from '../components/workout/DayPicker';
 import { useFeature } from '../contexts/FeatureFlagsContext';
+import { isCardio, cardioTotals, formatPace, distanceUnitFor } from '../utils/cardio';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -58,6 +60,23 @@ function getWeightSeries(fitnessData) {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+const MODE_KEY = 'homeWorkoutMode'; // remembered per device
+
+// Totals across a session's cardio exercises, e.g. "30 min · 5.2 km · 5:46 /km"
+function cardioSummary(session, distUnit) {
+  let distance = 0, duration = 0;
+  (session.exercises || []).filter(isCardio).forEach(ex => {
+    const t = cardioTotals(ex, distUnit);
+    distance += t.distance;
+    duration += t.duration;
+  });
+  const parts = [];
+  if (duration) parts.push(`${Math.round(duration)} min`);
+  if (distance) parts.push(`${Math.round(distance * 100) / 100} ${distUnit}`);
+  if (duration && distance) parts.push(`${formatPace(duration / distance)} /${distUnit}`);
+  return parts.join(' · ') || 'No time or distance';
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 const HomeScreen = () => {
@@ -76,6 +95,37 @@ const HomeScreen = () => {
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
   const sessionRefs = useRef({});
+
+  // Lifting / cardio toggle: drives the log popup, the workouts list and the accent colour
+  const [mode, setModeState] = useState('strength');
+  const modeAnim = useRef(new Animated.Value(0)).current; // 0 = lifting (yellow), 1 = cardio (cyan)
+  const listAnim = useRef(new Animated.Value(1)).current;
+  const [toggleWidth, setToggleWidth] = useState(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem(MODE_KEY).then(saved => {
+      if (saved === 'cardio') { setModeState('cardio'); modeAnim.setValue(1); }
+    }).catch(() => {});
+  }, []);
+
+  const setMode = next => {
+    if (next === mode) return;
+    setModeState(next);
+    Animated.timing(modeAnim, {
+      toValue: next === 'cardio' ? 1 : 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start();
+    listAnim.setValue(0);
+    Animated.timing(listAnim, { toValue: 1, duration: 320, delay: 80, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    AsyncStorage.setItem(MODE_KEY, next).catch(() => {});
+  };
+
+  const cardioMode = mode === 'cardio';
+  // Plain colours (icons, text) switch instantly; Animated ones (fills, borders) fade
+  const accent = cardioMode ? Colors.cardio : Colors.text;
+  const onAccent = cardioMode ? Colors.onCardio : Colors.onPrimary;
+  const accentFill = modeAnim.interpolate({ inputRange: [0, 1], outputRange: [Colors.primary, Colors.cardio] });
+  const accentTint = modeAnim.interpolate({ inputRange: [0, 1], outputRange: ['rgba(255,230,0,0.12)', 'rgba(34,211,238,0.14)'] });
+  const cardBorder = modeAnim.interpolate({ inputRange: [0, 1], outputRange: [Colors.borderColor, 'rgba(34,211,238,0.4)'] });
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -150,9 +200,14 @@ const HomeScreen = () => {
   const priorWeight = getWeightSeries(fitnessData).filter(e => e.date < selectedKey).pop() || null;
   const isToday = selectedKey === todayKey;
 
-  // Workouts on the selected day
+  // Workouts on the selected day that match the lifting / cardio toggle
+  const distUnit = distanceUnitFor(unit);
   const daySessions = history
     .filter(s => toKey(new Date(s.completedAt)) === selectedKey)
+    .filter(s => {
+      const exs = s.exercises || [];
+      return exs.length ? exs.some(ex => isCardio(ex) === cardioMode) : !cardioMode;
+    })
     .sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 
   if (loading) {
@@ -180,27 +235,52 @@ const HomeScreen = () => {
           <Text style={styles.headerGreeting}>Hey, {firstName}</Text>
         </View>
 
+        {/* Lifting / cardio toggle */}
+        <View style={styles.modeToggle} onLayout={e => setToggleWidth(e.nativeEvent.layout.width)}>
+          {toggleWidth > 0 && (
+            <Animated.View
+              style={[styles.modeThumb, {
+                width: (toggleWidth - 8) / 2,
+                backgroundColor: accentFill,
+                transform: [{ translateX: modeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, (toggleWidth - 8) / 2] }) }],
+              }]}
+            />
+          )}
+          {[
+            { id: 'strength', label: 'Lifting', icon: 'barbell-outline' },
+            { id: 'cardio', label: 'Cardio', icon: 'walk-outline' },
+          ].map(opt => {
+            const active = mode === opt.id;
+            return (
+              <TouchableOpacity key={opt.id} style={styles.modeOption} onPress={() => setMode(opt.id)} activeOpacity={0.8}>
+                <Ionicons name={opt.icon} size={16} color={active ? onAccent : Colors.gray} />
+                <Text style={[styles.modeLabel, { color: active ? onAccent : Colors.gray }]}>{opt.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         {/* Day switcher: weight, meals and workouts below follow the selected day */}
-        <View style={styles.dayNav}>
+        <Animated.View style={[styles.dayNav, { borderColor: cardBorder }]}>
           <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(-1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-back" size={18} color={Colors.text} />
+            <Ionicons name="chevron-back" size={18} color={accent} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.dayNavCenter} onPress={() => setDayPickerOpen(true)} activeOpacity={0.7}>
-            <Ionicons name="calendar-outline" size={15} color={Colors.text} />
+            <Ionicons name="calendar-outline" size={15} color={accent} />
             <Text style={styles.dayNavLabel}>{fmtDayLabel(selectedKey, todayKey)}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.dayNavBtn} onPress={() => changeDay(1)} disabled={isToday} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : Colors.text} />
+            <Ionicons name="chevron-forward" size={18} color={isToday ? Colors.borderColor : accent} />
           </TouchableOpacity>
-        </View>
+        </Animated.View>
 
         {/* Weight */}
         {weightEnabled && (
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, { borderColor: cardBorder }]}>
             <View style={[styles.promptRow, { marginTop: 0 }]}>
-              <View style={[styles.iconBg, { backgroundColor: 'rgba(255,230,0,0.12)' }]}>
-                <Ionicons name="scale-outline" size={18} color={Colors.text} />
-              </View>
+              <Animated.View style={[styles.iconBg, { backgroundColor: accentTint }]}>
+                <Ionicons name="scale-outline" size={18} color={accent} />
+              </Animated.View>
               <View style={styles.promptText}>
                 <Text style={styles.promptTitle}>Weight</Text>
                 <Text style={styles.promptSub}>
@@ -213,12 +293,13 @@ const HomeScreen = () => {
               </View>
               {dayWeight != null && !editingWeight ? (
                 <TouchableOpacity
-                  style={styles.editIconBtn}
                   onPress={() => { setWeightInput(w(dayWeight)); setEditingWeight(true); }}
                   activeOpacity={0.7}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons name="pencil" size={16} color={Colors.text} />
+                  <Animated.View style={[styles.editIconBtn, { backgroundColor: accentTint }]}>
+                    <Ionicons name="pencil" size={16} color={accent} />
+                  </Animated.View>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.weightInputRow}>
@@ -243,76 +324,89 @@ const HomeScreen = () => {
                     selectTextOnFocus
                   />
                   <TouchableOpacity
-                    style={[styles.actionBtn, !(parseFloat(weightInput) > 0) && styles.actionBtnDisabled]}
+                    style={!(parseFloat(weightInput) > 0) && styles.actionBtnDisabled}
                     onPress={saveWeight}
                     disabled={savingWeight || !(parseFloat(weightInput) > 0)}
                     activeOpacity={0.8}
                   >
-                    {savingWeight
-                      ? <ActivityIndicator size="small" color={Colors.onPrimary} />
-                      : <Text style={styles.actionBtnText}>Save</Text>}
+                    <Animated.View style={[styles.actionBtn, { backgroundColor: accentFill }]}>
+                      {savingWeight
+                        ? <ActivityIndicator size="small" color={onAccent} />
+                        : <Text style={[styles.actionBtnText, { color: onAccent }]}>Save</Text>}
+                    </Animated.View>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
 
-          </View>
+          </Animated.View>
         )}
 
         {/* Meals */}
         {mealsEnabled && (
-          <View style={styles.card}>
+          <Animated.View style={[styles.card, { borderColor: cardBorder }]}>
             <MealLog
               dayKey={selectedKey}
               dayData={fitnessData[selectedKey]}
               onSaved={setFitnessData}
+              accent={accent}
+              onAccent={onAccent}
+              accentFill={accentFill}
+              accentTint={accentTint}
             />
-          </View>
+          </Animated.View>
         )}
 
         {/* Workouts for the selected day */}
-        <View style={styles.card}>
+        <Animated.View style={[styles.card, { borderColor: cardBorder }]}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardLabel}>{isToday ? "TODAY'S WORKOUTS" : 'WORKOUTS'}</Text>
+            <Text style={[styles.cardLabel, { color: accent }]}>
+              {cardioMode ? (isToday ? "TODAY'S CARDIO" : 'CARDIO') : (isToday ? "TODAY'S LIFTS" : 'LIFTS')}
+            </Text>
             <TouchableOpacity
-              style={styles.addBtn}
               onPress={() => setLogModalVisible(true)}
               activeOpacity={0.8}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="add" size={20} color={Colors.onPrimary} />
+              <Animated.View style={[styles.addBtn, { backgroundColor: accentFill }]}>
+                <Ionicons name="add" size={20} color={onAccent} />
+              </Animated.View>
             </TouchableOpacity>
           </View>
-          {daySessions.length === 0 ? (
-            <Text style={styles.emptyText}>No workouts logged {isToday ? 'today' : 'on this day'}.</Text>
-          ) : (
-            daySessions.map((session, i) => {
-              const exercises = session.exercises || [];
-              const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
-              return (
-                <TouchableOpacity
-                  key={session.id}
-                  ref={ref => { sessionRefs.current[session.id] = ref; }}
-                  style={[styles.sessionRow, i > 0 && styles.sessionRowBorder]}
-                  onPress={() => openSession(session)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.iconBg, { backgroundColor: 'rgba(99,102,241,0.12)' }]}>
-                    <Ionicons name="barbell-outline" size={18} color={Colors.indigo} />
-                  </View>
-                  <View style={styles.promptText}>
-                    <Text style={styles.promptTitle} numberOfLines={1}>{session.name}</Text>
-                    <Text style={styles.promptSub} numberOfLines={1}>
-                      {exercises.length} exercise{exercises.length !== 1 ? 's' : ''} · {setCount} set{setCount !== 1 ? 's' : ''}
-                      {exercises.length ? ` · ${exercises.map(ex => ex.name).join(', ')}` : ''}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.gray} />
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
+          <Animated.View style={{ opacity: listAnim, transform: [{ translateY: listAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+            {daySessions.length === 0 ? (
+              <Text style={styles.emptyText}>No {cardioMode ? 'cardio' : 'lifting'} logged {isToday ? 'today' : 'on this day'}.</Text>
+            ) : (
+              daySessions.map((session, i) => {
+                const exercises = session.exercises || [];
+                const setCount = exercises.reduce((n, ex) => n + (ex.sets?.length || 0), 0);
+                return (
+                  <TouchableOpacity
+                    key={session.id}
+                    ref={ref => { sessionRefs.current[session.id] = ref; }}
+                    style={[styles.sessionRow, i > 0 && styles.sessionRowBorder]}
+                    onPress={() => openSession(session)}
+                    activeOpacity={0.7}
+                  >
+                    <Animated.View style={[styles.iconBg, { backgroundColor: accentTint }]}>
+                      <Ionicons name={cardioMode ? 'walk-outline' : 'barbell-outline'} size={18} color={accent} />
+                    </Animated.View>
+                    <View style={styles.promptText}>
+                      <Text style={styles.promptTitle} numberOfLines={1}>{session.name}</Text>
+                      <Text style={styles.promptSub} numberOfLines={1}>
+                        {cardioMode ? cardioSummary(session, distUnit) : (
+                          `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''} · ${setCount} set${setCount !== 1 ? 's' : ''}`
+                          + (exercises.length ? ` · ${exercises.map(ex => ex.name).join(', ')}` : '')
+                        )}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={Colors.gray} />
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </Animated.View>
+        </Animated.View>
 
       </ScrollView>
 
@@ -332,6 +426,9 @@ const HomeScreen = () => {
         onSaved={reloadHistory}
         targetDate={isToday ? null : selectedKey}
         defaultUnit={unit}
+        mode={mode}
+        accent={cardioMode ? Colors.cardio : Colors.primary}
+        onAccent={onAccent}
       />
 
       <EditWorkoutModal
@@ -397,7 +494,7 @@ const styles = StyleSheet.create({
   weightInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editIconBtn: {
     width: 36, height: 36, borderRadius: 10,
-    backgroundColor: 'rgba(255,230,0,0.12)', justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
   },
   weightInput: {
     width: 64, paddingVertical: 8, paddingHorizontal: 10,
@@ -407,15 +504,24 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     minWidth: 56, paddingVertical: 9, paddingHorizontal: 14,
-    backgroundColor: Colors.primary, borderRadius: 10, alignItems: 'center',
+    borderRadius: 10, alignItems: 'center',
   },
   actionBtnDisabled: { opacity: 0.4 },
   actionBtnText: { color: Colors.onPrimary, fontSize: 14, fontWeight: '700' },
 
-  // Today's workouts
+  // Lifting / cardio toggle
+  modeToggle: {
+    flexDirection: 'row', marginHorizontal: 18, marginTop: 8, padding: 4,
+    backgroundColor: Colors.cardBackground, borderRadius: 14, borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  modeThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 10 },
+  modeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
+  modeLabel: { fontSize: 14, fontWeight: '700' },
+
+  // Workouts
   addBtn: {
     width: 30, height: 30, borderRadius: 999,
-    backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
   },
   sessionRow:       { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 12 },
   sessionRowBorder: { borderTopWidth: 1, borderTopColor: Colors.borderColor, marginTop: 12 },

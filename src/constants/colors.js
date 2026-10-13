@@ -4,6 +4,8 @@ export const Colors = {
   text: '#FFE600',        // Yellow accent - highlighted wording, icons, values
   primary: '#FFE600',     // Yellow accent - primary buttons and active states
   onPrimary: '#0E0E0E',   // Text/icons drawn on primary (yellow) fills
+  cardio: '#22D3EE',      // Cyan accent for Home's cardio mode
+  onCardio: '#0E0E0E',    // Text/icons drawn on cardio (cyan) fills
   background: '#0E0E0E',  // Near-black - main UI color
 
   // Supporting colors
