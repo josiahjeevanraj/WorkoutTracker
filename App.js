@@ -1,4 +1,5 @@
 import React from 'react';
+import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -6,6 +7,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import AuthScreen from './src/screens/AuthScreen';
 import { ThemeProvider } from './src/contexts/ThemeContext';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import UpdateBanner from './src/components/UpdateBanner';
 
 const Root = () => {
   const { session, loading } = useAuth();
@@ -20,7 +22,10 @@ export default function App() {
         <AuthProvider>
           <ThemeProvider>
             <StatusBar style="auto" />
-            <Root />
+            <View style={{ flex: 1 }}>
+              <Root />
+              <UpdateBanner />
+            </View>
           </ThemeProvider>
         </AuthProvider>
       </SafeAreaProvider>
