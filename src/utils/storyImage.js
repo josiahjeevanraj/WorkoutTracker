@@ -216,3 +216,83 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
   return new Promise((resolve, reject) =>
     canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Could not create image'))), 'image/png'));
 }
+
+// Transparent PNG "sticker" with just the headline stats, for pasting over a
+// photo in Instagram's story editor. Returns a PNG Blob.
+export async function renderSessionSticker(session, { weightUnit = 'kg' } = {}) {
+  const { cardio, stats } = summarise(session, weightUnit);
+  const accent = cardio ? Colors.cardio : Colors.primary;
+  const accentRgb = cardio ? '34,211,238' : '255,230,0';
+
+  const SW = 900;
+  const P = 64;
+  const innerW = SW - P * 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = SW;
+  let ctx = canvas.getContext('2d');
+
+  // Measure the name first so the canvas can be sized to the content
+  ctx.font = `800 76px ${FONT}`;
+  const nameLines = wrap(ctx, session.name || 'Workout', innerW, 2);
+  const tileGap = 20;
+  const tileW = (innerW - tileGap * 2) / 3;
+  const tileH = 170;
+  const height = P + 52 + nameLines.length * 88 + 12 + 64 + tileH + 48 + 70 + 56 - 8;
+  canvas.height = height; // resizing resets the context state
+  ctx = canvas.getContext('2d');
+  ctx.textBaseline = 'top';
+
+  // Translucent card so the text stays readable on any photo
+  roundRect(ctx, 0, 0, SW, height, 48);
+  ctx.fillStyle = 'rgba(14,14,14,0.72)';
+  ctx.fill();
+  ctx.strokeStyle = `rgba(${accentRgb},0.6)`;
+  ctx.lineWidth = 4;
+  roundRect(ctx, 2, 2, SW - 4, height - 4, 46);
+  ctx.stroke();
+
+  let y = P;
+  ctx.fillStyle = accent;
+  ctx.font = `800 30px ${FONT}`;
+  ctx.fillText(cardio ? 'CARDIO SESSION' : 'LIFTING SESSION', P, y);
+  y += 52;
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `800 76px ${FONT}`;
+  nameLines.forEach(line => { ctx.fillText(line, P, y); y += 88; });
+  y += 12;
+
+  ctx.fillStyle = Colors.textSecondary;
+  ctx.font = `500 32px ${FONT}`;
+  ctx.fillText(new Date(session.completedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }), P, y);
+  y += 64;
+
+  stats.forEach((stat, i) => {
+    const x = P + i * (tileW + tileGap);
+    roundRect(ctx, x, y, tileW, tileH, 28);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fill();
+    ctx.fillStyle = Colors.textSecondary;
+    ctx.font = `700 24px ${FONT}`;
+    ctx.fillText(stat.label, x + 24, y + 30);
+    ctx.fillStyle = accent;
+    let size = 52;
+    ctx.font = `800 ${size}px ${FONT}`;
+    while (ctx.measureText(stat.value).width > tileW - 48 && size > 28) {
+      size -= 4;
+      ctx.font = `800 ${size}px ${FONT}`;
+    }
+    ctx.fillText(stat.value, x + 24, y + 82);
+  });
+  y += tileH + 48;
+
+  ctx.fillStyle = accent;
+  roundRect(ctx, P, y, 90, 10, 5);
+  ctx.fill();
+  ctx.fillStyle = Colors.textSecondary;
+  ctx.font = `600 30px ${FONT}`;
+  ctx.fillText('Logged with Motion', P, y + 28);
+
+  return new Promise((resolve, reject) =>
+    canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('Could not create image'))), 'image/png'));
+}

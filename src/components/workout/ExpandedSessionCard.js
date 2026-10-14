@@ -140,6 +140,9 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                     <Text style={styles.expandExSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
                   )}
                 </View>
+                {(!Array.isArray(ex.sets) || ex.sets.length === 0) && (
+                  <Text style={styles.noExercisesText}>Not logged yet — tap Edit to add sets</Text>
+                )}
                 {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
                   <View key={si} style={[styles.expandSetRow, set.warmup && styles.expandWarmupRow]}>
                     <View style={styles.expandSetLabelRow}>

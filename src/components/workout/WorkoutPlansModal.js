@@ -8,16 +8,21 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor from './ExerciseEditor';
-import { isCardio, distanceUnitFor } from '../../utils/cardio';
+import { isCardio, distanceUnitFor, newCardioSet } from '../../utils/cardio';
 import styles from './workoutStyles';
 
 // Plans are stored under @workouts: { id, name, createdAt, exercises: [{ name, sets }] }
-export const planToEditorExercises = (plan, defaultUnit) =>
-  (plan.exercises || []).map((ex, i) => ({
-    ...ex,
-    sets: (ex.sets || []).map(s => ({ ...s, unit: s.unit || (isCardio(ex) ? distanceUnitFor(defaultUnit) : defaultUnit) })),
-    _key: `${Date.now()}-${i}`,
-  }));
+// fillEmptySets: give exercises saved without sets one blank row (when logging from a plan)
+export const planToEditorExercises = (plan, defaultUnit, { fillEmptySets = false } = {}) =>
+  (plan.exercises || []).map((ex, i) => {
+    const cardio = isCardio(ex);
+    const unit = cardio ? distanceUnitFor(defaultUnit) : defaultUnit;
+    let sets = (ex.sets || []).map(s => ({ ...s, unit: s.unit || unit }));
+    if (!sets.length && fillEmptySets) {
+      sets = [cardio ? newCardioSet(unit) : { reps: '', weight: '', warmup: false, unit }];
+    }
+    return { ...ex, sets, _key: `${Date.now()}-${i}` };
+  });
 
 const WorkoutPlansModal = ({ visible, onClose, defaultUnit = 'kg' }) => {
   const [plans, setPlans] = useState([]);
@@ -94,7 +99,7 @@ const WorkoutPlansModal = ({ visible, onClose, defaultUnit = 'kg' }) => {
                 />
 
                 <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-                <ExerciseEditor exercises={editing.exercises} onChange={setExercises} defaultUnit={defaultUnit} />
+                <ExerciseEditor exercises={editing.exercises} onChange={setExercises} defaultUnit={defaultUnit} setsOptional />
 
                 {editing.id && (
                   <TouchableOpacity style={styles.planDeleteBtn} onPress={handleDelete}>

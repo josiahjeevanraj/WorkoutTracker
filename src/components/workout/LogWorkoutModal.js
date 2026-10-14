@@ -5,7 +5,7 @@ import {
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
-import ExerciseEditor, { cleanExercises, hasEmptyReps, MISSING_SET_DETAILS } from './ExerciseEditor';
+import ExerciseEditor, { cleanExercises } from './ExerciseEditor';
 import { planToEditorExercises } from './WorkoutPlansModal';
 import { isCardio } from '../../utils/cardio';
 import styles from './workoutStyles';
@@ -33,7 +33,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const applyPlan = plan => {
     setPlanId(plan.id);
     setName(plan.name);
-    setExercises(planToEditorExercises(plan, defaultUnit));
+    setExercises(planToEditorExercises(plan, defaultUnit, { fillEmptySets: true }));
   };
 
   const close = () => {
@@ -44,7 +44,6 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const handleLog = async () => {
     const named = exercises.filter(ex => ex.name.trim());
     if (!named.length) { showAlert('No exercises', 'Please add at least one exercise before saving.'); return; }
-    if (hasEmptyReps(named)) { showAlert(...MISSING_SET_DETAILS); return; }
     const clean = cleanExercises(named);
     const completedAt = targetDate
       ? new Date(targetDate + 'T12:00:00').toISOString()

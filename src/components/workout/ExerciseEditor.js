@@ -144,14 +144,18 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
 
 // `onChange` receives an updater (exercises => exercises), like a state setter.
 // `mode` ('strength' | 'cardio', optional) limits the picker to that kind of exercise.
-const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
+// `setsOptional` (plans) lets exercises have no sets: new ones start without any.
+const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false }) => {
   const [pickerKey, setPickerKey] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
 
   const updateExercise = (key, field, value) =>
     onChange(list => list.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeExercise = key => onChange(list => list.filter(ex => ex._key !== key));
-  const addExercise = () => onChange(list => [...list, newExercise(defaultUnit, mode)]);
+  const addExercise = () => onChange(list => [
+    ...list,
+    setsOptional ? { ...newExercise(defaultUnit, mode), sets: [] } : newExercise(defaultUnit, mode),
+  ]);
 
   const updateSets = (exKey, fn) =>
     onChange(list => list.map(ex => ex._key === exKey ? { ...ex, sets: fn(ex.sets) } : ex));
@@ -200,7 +204,9 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
       if (ex._key !== exKey) return ex;
       const { type, ...rest } = ex;
       const next = cardio ? { ...rest, name, type: 'cardio' } : { ...rest, name };
-      if (cardio !== isCardio(ex)) next.sets = [cardio ? newCardioSet(distanceUnit) : newStrengthSet(defaultUnit)];
+      if (cardio !== isCardio(ex)) {
+        next.sets = setsOptional && !ex.sets?.length ? [] : [cardio ? newCardioSet(distanceUnit) : newStrengthSet(defaultUnit)];
+      }
       return next;
     }));
     setPickerKey(null);
@@ -277,6 +283,12 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
                 </ScrollView>
               </View>
             )}
+            {setsOptional && sets.length === 0 ? (
+              <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => addSet(ex._key, cardio)}>
+                <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
+                <Text style={styles.inlineAddSetText}>Add target sets (optional)</Text>
+              </TouchableOpacity>
+            ) : (
             <View style={styles.inlineSetsContainer}>
               <Text style={styles.swipeHint}>← swipe for actions →</Text>
               {sets.map((set, si) => (
@@ -285,7 +297,7 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
                   set={set}
                   si={si}
                   exKey={ex._key}
-                  canDelete={sets.length > 1}
+                  canDelete={setsOptional || sets.length > 1}
                   onUpdate={updateSet}
                   onDuplicate={duplicateSet}
                   onRemove={removeSet}
@@ -296,6 +308,7 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
                 <Text style={styles.inlineAddSetText}>Add Set</Text>
               </TouchableOpacity>
             </View>
+            )}
           </View>
         );
       })}
@@ -307,19 +320,23 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode }) => {
   );
 };
 
-// Strip editor-only keys and normalise blank weights/distances before saving
+const blank = v => !String(v ?? '').trim();
+
+// A row with nothing entered (strength: no weight or reps; cardio: no time or distance)
+const isEmptySet = (ex, s) => (isCardio(ex) ? blank(s.duration) && blank(s.distance) : blank(s.weight) && blank(s.reps));
+
+// Prepare exercises for saving. Supports logging in real time: empty rows are
+// dropped, partly filled sets are kept, and an exercise with nothing logged yet
+// is kept with no sets so it can be filled in later via Edit.
 export const cleanExercises = exercises =>
-  exercises.map(({ _key, ...ex }) => ({
-    ...ex,
-    sets: isCardio(ex)
-      ? ex.sets.map(s => ({ ...s, duration: String(s.duration ?? '').trim(), distance: String(s.distance ?? '').trim() || '0' }))
-      : ex.sets.map(s => ({ ...s, weight: String(s.weight).trim() || '0' })),
-  }));
-
-// Strength sets need reps; cardio sets need a time
-export const hasEmptyReps = exercises =>
-  exercises.some(ex => ex.sets.some(s => !String((isCardio(ex) ? s.duration : s.reps) ?? '').trim()));
-
-export const MISSING_SET_DETAILS = ['Missing details', 'Enter reps for every set (or time for treadmill sets) before saving.'];
+  exercises.map(({ _key, ...ex }) => {
+    const sets = (ex.sets || []).filter(s => !isEmptySet(ex, s));
+    return {
+      ...ex,
+      sets: isCardio(ex)
+        ? sets.map(s => ({ ...s, duration: String(s.duration ?? '').trim(), distance: String(s.distance ?? '').trim() || '0' }))
+        : sets.map(s => ({ ...s, weight: String(s.weight ?? '').trim() || '0', reps: String(s.reps ?? '').trim() })),
+    };
+  });
 
 export default ExerciseEditor;
