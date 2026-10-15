@@ -94,7 +94,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
             />
 
             <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} />
+            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} accent={accent} />
 
             <View style={styles.logNotesGroup}>
               <Text style={styles.logSectionLabel}>Notes</Text>

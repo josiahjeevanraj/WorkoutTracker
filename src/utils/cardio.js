@@ -1,16 +1,20 @@
 import { CARDIO_EXERCISES } from '../constants/exercises';
 
-// Cardio sets: { duration: minutes, distance, unit: 'km' | 'mi' }
+// Cardio sets: { duration: minutes, distance, unit: 'km' | 'mi', incline: percent }
+// Most cardio exercises are a single entry (one set); interval exercises keep multiple rows.
 const CARDIO_NAMES = new Set(CARDIO_EXERCISES.map(n => n.toLowerCase()));
 
 export const isCardioName = name => CARDIO_NAMES.has((name || '').toLowerCase());
 
 export const isCardio = ex => ex?.type === 'cardio' || isCardioName(ex?.name);
 
+const INTERVAL_NAMES = new Set(['treadmill sprint intervals']);
+export const isIntervalCardio = ex => INTERVAL_NAMES.has((ex?.name || '').toLowerCase());
+
 // Distance unit that matches the user's weight unit preference
 export const distanceUnitFor = weightUnit => (weightUnit === 'lbs' ? 'mi' : 'km');
 
-export const newCardioSet = unit => ({ duration: '', distance: '', unit });
+export const newCardioSet = unit => ({ duration: '', distance: '', unit, incline: '' });
 
 const KM_PER_MI = 1.609344;
 
@@ -39,7 +43,7 @@ export const cardioTotals = (ex, unit) => {
   return { distance, duration, pace: distance > 0 && duration > 0 ? duration / distance : null };
 };
 
-// e.g. "30 min · 5.2 km · 5:46 /km"
+// e.g. "30 min · 5.2 km · 5:46 /km · 6% incline" (incline only when above 0)
 export const formatCardioSet = set => {
   const minutes = parseFloat(set.duration) || 0;
   const distance = parseFloat(set.distance) || 0;
@@ -48,5 +52,7 @@ export const formatCardioSet = set => {
   if (minutes) parts.push(`${minutes} min`);
   if (distance) parts.push(`${distance} ${unit}`);
   if (minutes && distance) parts.push(`${fmtPace(minutes, distance)} /${unit}`);
+  const incline = parseFloat(set.incline) || 0;
+  if (incline > 0) parts.push(`${incline}% incline`);
   return parts.join(' · ') || '—';
 };

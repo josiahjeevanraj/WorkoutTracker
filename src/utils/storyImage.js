@@ -7,7 +7,6 @@ const W = 1080;
 const H = 1920;
 const PAD = 96;
 const FONT = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
-const KG_PER_LB = 0.453592;
 
 const fmt = v => (Math.round(v * 10) / 10).toLocaleString('en-US');
 
@@ -82,15 +81,10 @@ function summarise(session, weightUnit) {
     };
   }
 
-  // Volume in the user's unit, converting sets logged in the other unit
-  let setCount = 0, volume = 0;
+  // Working sets (warmups excluded)
+  let setCount = 0;
   exercises.filter(ex => !isCardio(ex)).forEach(ex => (ex.sets || []).forEach(s => {
-    if (s.warmup) return;
-    setCount += 1;
-    let w = parseFloat(s.weight) || 0;
-    const from = s.unit || 'kg';
-    if (from !== weightUnit) w = weightUnit === 'lbs' ? w / KG_PER_LB : w * KG_PER_LB;
-    volume += w * (parseInt(s.reps, 10) || 0);
+    if (!s.warmup) setCount += 1;
   }));
   return {
     cardio,
@@ -98,7 +92,6 @@ function summarise(session, weightUnit) {
     stats: [
       { label: 'EXERCISES', value: String(exercises.length) },
       { label: 'SETS', value: String(setCount) },
-      { label: 'VOLUME', value: volume ? `${Math.round(volume).toLocaleString('en-US')} ${weightUnit}` : '—' },
     ],
   };
 }
@@ -151,7 +144,7 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
 
   // Stat tiles
   const gap = 28;
-  const tileW = (W - PAD * 2 - gap * 2) / 3;
+  const tileW = (W - PAD * 2 - gap * (stats.length - 1)) / stats.length;
   const tileH = 210;
   stats.forEach((stat, i) => {
     const x = PAD + i * (tileW + gap);
@@ -235,7 +228,7 @@ export async function renderSessionSticker(session, { weightUnit = 'kg' } = {}) 
   ctx.font = `800 76px ${FONT}`;
   const nameLines = wrap(ctx, session.name || 'Workout', innerW, 2);
   const tileGap = 20;
-  const tileW = (innerW - tileGap * 2) / 3;
+  const tileW = (innerW - tileGap * (stats.length - 1)) / stats.length;
   const tileH = 170;
   const height = P + 52 + nameLines.length * 88 + 12 + 64 + tileH + 48 + 70 + 56 - 8;
   canvas.height = height; // resizing resets the context state

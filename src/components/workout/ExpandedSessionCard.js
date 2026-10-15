@@ -9,7 +9,7 @@ import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import DayPicker from './DayPicker';
 import StoryShare from './StoryShare';
-import { isCardio, formatCardioSet } from '../../utils/cardio';
+import { isCardio, isIntervalCardio, formatCardioSet } from '../../utils/cardio';
 import styles from './workoutStyles';
 
 const toKey = d =>
@@ -136,7 +136,8 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
               <View key={i} style={styles.expandExercise}>
                 <View style={styles.expandExHeader}>
                   <Text style={styles.expandExName}>{ex.name}</Text>
-                  {Array.isArray(ex.sets) && (
+                  {/* Single-entry cardio has no sets to count */}
+                  {Array.isArray(ex.sets) && !(isCardio(ex) && !isIntervalCardio(ex)) && (
                     <Text style={styles.expandExSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
                   )}
                 </View>
@@ -151,7 +152,9 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                           <Text style={styles.warmupTagText}>W</Text>
                         </View>
                       )}
-                      <Text style={[styles.expandSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
+                      <Text style={[styles.expandSetLabel, set.warmup && { color: Colors.amber }]}>
+                        {isCardio(ex) && !isIntervalCardio(ex) ? 'Total' : `Set ${si + 1}`}
+                      </Text>
                     </View>
                     <Text style={styles.expandSetMeta}>
                       {isCardio(ex)
