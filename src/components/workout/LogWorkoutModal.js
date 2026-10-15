@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform,
+  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor, { cleanExercises } from './ExerciseEditor';
@@ -24,6 +25,8 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const [plans, setPlans] = useState([]);
   const restTimer = useRestTimer();
   const [planId, setPlanId] = useState(null);
+  const [collapseToken, setCollapseToken] = useState(0); // closes the open exercise card
+  const [showNotes, setShowNotes] = useState(false); // notes are optional, behind a button
 
   useEffect(() => {
     if (!visible) return;
@@ -40,7 +43,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   };
 
   const close = () => {
-    setName(''); setExercises([]); setNotes(''); setPlanId(null);
+    setName(''); setExercises([]); setNotes(''); setPlanId(null); setShowNotes(false);
     onClose();
   };
 
@@ -69,11 +72,12 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
           <Text style={styles.modalTitle}>{mode === 'cardio' ? 'Log Cardio' : 'Log Workout'}</Text>
           <RestTimerBar />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Pressable onPress={() => setCollapseToken(n => n + 1)} style={styles.tapCatcher}>
 
             {plans.length > 0 && (
-              <>
-                <Text style={styles.logSectionLabel}>Start from plan</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planChipRow} style={{ marginBottom: 16 }}>
+              <View style={styles.planPickRow}>
+                <Text style={styles.planPickLabel}>PLAN</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.planChipRow} style={{ flex: 1 }}>
                   {plans.map(plan => (
                     <TouchableOpacity
                       key={plan.id}
@@ -85,34 +89,41 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
-              </>
+              </View>
             )}
 
-            <Text style={styles.logSectionLabel}>Session Name</Text>
             <TextInput
               style={styles.sessionNameInput}
               value={name}
               onChangeText={setName}
-                            placeholder={mode === 'cardio' ? 'e.g. Morning Run, Treadmill...' : 'e.g. Chest Day, Leg Day...'}
+              placeholder={mode === 'cardio' ? 'Session name (e.g. Morning Run)' : 'Session name (e.g. Chest Day)'}
               placeholderTextColor={Colors.gray}
             />
 
-            <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} accent={accent} onSetAdded={restTimer?.startIfEnabled} />
+            <Text style={[styles.logSectionLabel, { marginTop: 14 }]}>Exercises</Text>
+            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} accent={accent} onSetAdded={restTimer?.startIfEnabled} collapseToken={collapseToken} />
 
-            <View style={styles.logNotesGroup}>
-              <Text style={styles.logSectionLabel}>Notes</Text>
-              <TextInput
-                style={styles.logNotesInput}
-                value={notes}
-                onChangeText={setNotes}
-                placeholder="How did the session go? Any PRs?"
-                placeholderTextColor={Colors.gray}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+            {showNotes || notes ? (
+              <View style={styles.logNotesGroup}>
+                <Text style={styles.logSectionLabel}>Notes</Text>
+                <TextInput
+                  style={styles.logNotesInput}
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder="How did the session go? Any PRs?"
+                  placeholderTextColor={Colors.gray}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  autoFocus={showNotes && !notes}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.addNotesBtn} onPress={() => setShowNotes(true)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="create-outline" size={15} color={accent} />
+                <Text style={[styles.addNotesText, { color: accent }]}>Add notes</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={[styles.modalButtons, { marginTop: 20 }]}>
               <TouchableOpacity style={[styles.modalButton, styles.cancelBtn]} onPress={close}>
@@ -123,6 +134,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
               </TouchableOpacity>
             </View>
 
+            </Pressable>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -226,15 +226,14 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
 // `setsOptional` (plans) lets exercises have no sets: new ones start without any.
 // `accent` colours highlights (Home's cardio mode passes cyan).
 // `onSetAdded` fires when Add Set / Dup is used (starts the rest timer while logging).
-const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false, accent = Colors.text, onSetAdded }) => {
+// `collapseToken`: bump it to close the open card (the parent does this on taps outside cards).
+const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false, accent = Colors.text, onSetAdded, collapseToken }) => {
   const [pickerKey, setPickerKey] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
-  const [openKeys, setOpenKeys] = useState(() => new Set()); // expanded exercise cards
-  const toggleOpen = key => setOpenKeys(prev => {
-    const next = new Set(prev);
-    next.has(key) ? next.delete(key) : next.add(key);
-    return next;
-  });
+  // One card open at a time, so opening another (or tapping outside) closes it
+  const [openKey, setOpenKey] = useState(null);
+  const toggleOpen = key => setOpenKey(prev => (prev === key ? null : key));
+  useEffect(() => { if (collapseToken) setOpenKey(null); }, [collapseToken]);
 
   const updateExercise = (key, field, value) =>
     onChange(list => list.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
@@ -320,7 +319,7 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
         const cardio = isCardio(ex);
         const singleCardio = cardio && !isIntervalCardio(ex); // one time/distance/incline entry, no sets
         const SetRow = cardio ? CardioSetRow : SwipeableSetRow;
-        const open = !!ex.name && openKeys.has(ex._key);
+        const open = !!ex.name && openKey === ex._key;
         const openPicker = () => { setPickerKey(pickerKey === ex._key ? null : ex._key); setPickerSearch(''); };
         // The first row of an exercise isn't a rest, so it doesn't start the timer
         const addRow = () => { addSet(ex._key, cardio); if (sets.length > 0) onSetAdded?.(); };
@@ -328,7 +327,12 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
           ? (setsOptional ? 'Add target time & distance' : 'Add time & distance')
           : (setsOptional ? 'Add target set' : 'Add Set');
         return (
-          <View key={ex._key} style={[styles.editExerciseBlock, open && { borderColor: accent }]}>
+          <View
+            key={ex._key}
+            style={[styles.editExerciseBlock, open && { borderColor: accent }]}
+            // Claim taps inside the card so the parent's "tap outside" handler doesn't close it
+            onStartShouldSetResponder={() => true}
+          >
             {/* Card header: tap to expand (or to pick, before an exercise is chosen) */}
             <TouchableOpacity
               style={styles.exCardHeader}

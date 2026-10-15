@@ -5,8 +5,8 @@ import { Colors } from '../../constants/colors';
 export default StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: Colors.modalBackground, justifyContent: 'center', paddingHorizontal: 20 },
   detailModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 24, maxHeight: '88%', borderWidth: 1, borderColor: Colors.borderColor },
-  logModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 24, maxHeight: '90%', borderWidth: 1, borderColor: Colors.borderColor },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 20, textAlign: 'center' },
+  logModal: { backgroundColor: Colors.cardBackground, borderRadius: 24, padding: 20, maxHeight: '90%', borderWidth: 1, borderColor: Colors.borderColor },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 14, textAlign: 'center' },
   expandBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 },
   expandedCard: { position: 'absolute', zIndex: 11, backgroundColor: Colors.cardBackground, overflow: 'hidden' },
   expandHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
@@ -92,8 +92,12 @@ export default StyleSheet.create({
   swipeDupAction: { backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
   swipeDelAction: { backgroundColor: Colors.softRed, justifyContent: 'center', alignItems: 'center', width: 64, borderRadius: 8, marginBottom: 4, gap: 4 },
   swipeActionText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
-  logSectionLabel: { fontSize: 13, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  logSectionLabel: { fontSize: 12, fontWeight: '700', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
   logNotesGroup: { marginTop: 20 },
+  addNotesBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 16, paddingVertical: 6 },
+  addNotesText: { fontSize: 13, fontWeight: '600' },
+  // Wraps popup content so taps outside an exercise card close it (no pointer cursor on web)
+  tapCatcher: { cursor: 'auto' },
   logNotesInput: {
     borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10,
     backgroundColor: Colors.background, padding: 12,
@@ -101,8 +105,8 @@ export default StyleSheet.create({
   },
   sessionNameInput: {
     borderWidth: 1, borderColor: Colors.borderColor, borderRadius: 10,
-    backgroundColor: Colors.background, padding: 12,
-    fontSize: 15, color: '#FFFFFF', marginBottom: 4,
+    backgroundColor: Colors.background, paddingVertical: 10, paddingHorizontal: 12,
+    fontSize: 15, color: '#FFFFFF',
   },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalButton: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center' },
@@ -118,7 +122,9 @@ export default StyleSheet.create({
   planEmptyText: { fontSize: 14, color: Colors.gray, textAlign: 'center', paddingVertical: 16 },
   planDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, marginTop: 12 },
   planDeleteText: { fontSize: 14, color: Colors.softRed, fontWeight: '600' },
-  planChipRow: { flexDirection: 'row', gap: 8, paddingBottom: 4 },
-  planChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
+  planPickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  planPickLabel: { fontSize: 11, fontWeight: '700', color: Colors.gray, letterSpacing: 0.8 },
+  planChipRow: { flexDirection: 'row', gap: 6 },
+  planChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: Colors.borderColor, backgroundColor: Colors.background },
   planChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
 });

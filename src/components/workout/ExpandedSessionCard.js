@@ -25,6 +25,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
   const anim = useRef(new Animated.Value(0)).current;
   const [notes, setNotes] = useState(session.notes || '');
   const notesRef = useRef(session.notes || '');
+  const [showNotes, setShowNotes] = useState(false); // notes box opens from a small button
   const [copyPickerOpen, setCopyPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const copyingRef = useRef(false);
@@ -165,18 +166,27 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                 ))}
               </View>
             ))}
-            <View style={styles.expandNotesBlock}>
-              <Text style={styles.expandNotesLabel}>Notes</Text>
-              <TextInput
-                style={styles.expandNotesInput}
-                value={notes}
-                onChangeText={text => { setNotes(text); notesRef.current = text; }}
-                placeholder="Add notes..."
-                placeholderTextColor={Colors.gray}
-                multiline
-                textAlignVertical="top"
-              />
-            </View>
+            {/* Notes can be added here without editing; saved when the card closes */}
+            {showNotes || notes ? (
+              <View style={styles.expandNotesBlock}>
+                <Text style={styles.expandNotesLabel}>Notes</Text>
+                <TextInput
+                  style={styles.expandNotesInput}
+                  value={notes}
+                  onChangeText={text => { setNotes(text); notesRef.current = text; }}
+                  placeholder="Add notes..."
+                  placeholderTextColor={Colors.gray}
+                  multiline
+                  textAlignVertical="top"
+                  autoFocus={showNotes && !notes}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={[styles.addNotesBtn, { marginTop: 20 }]} onPress={() => setShowNotes(true)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="create-outline" size={15} color={Colors.text} />
+                <Text style={[styles.addNotesText, { color: Colors.text }]}>Add notes</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
 
           {/* Actions */}

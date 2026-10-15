@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform,
+  View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -14,8 +14,11 @@ import RestTimerBar from '../RestTimerBar';
 const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => {
   const [edited, setEdited] = useState(null);
   const restTimer = useRestTimer();
+  const [collapseToken, setCollapseToken] = useState(0); // closes the open exercise card
+  const [showNotes, setShowNotes] = useState(false); // notes are optional, behind a button
 
   useEffect(() => {
+    setShowNotes(false);
     setEdited(session
       ? { ...session, exercises: (session.exercises || []).map((ex, i) => ({ ...ex, _key: i.toString() })) }
       : null);
@@ -50,23 +53,33 @@ const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => 
           </View>
           <RestTimerBar />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <Pressable onPress={() => setCollapseToken(n => n + 1)} style={styles.tapCatcher}>
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionLabel}>Exercises</Text>
-              {edited && <ExerciseEditor exercises={edited.exercises} onChange={setExercises} defaultUnit={defaultUnit} onSetAdded={restTimer?.startIfEnabled} />}
+              {edited && <ExerciseEditor exercises={edited.exercises} onChange={setExercises} defaultUnit={defaultUnit} onSetAdded={restTimer?.startIfEnabled} collapseToken={collapseToken} />}
             </View>
-            <View style={styles.logNotesGroup}>
-              <Text style={styles.detailSectionLabel}>Notes</Text>
-              <TextInput
-                style={styles.logNotesInput}
-                value={edited?.notes || ''}
-                onChangeText={text => setEdited(prev => ({ ...prev, notes: text }))}
-                placeholder="Session notes, PRs, how it felt..."
-                placeholderTextColor={Colors.gray}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-            </View>
+            {showNotes || edited?.notes ? (
+              <View style={styles.logNotesGroup}>
+                <Text style={styles.detailSectionLabel}>Notes</Text>
+                <TextInput
+                  style={styles.logNotesInput}
+                  value={edited?.notes || ''}
+                  onChangeText={text => setEdited(prev => ({ ...prev, notes: text }))}
+                  placeholder="Session notes, PRs, how it felt..."
+                  placeholderTextColor={Colors.gray}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                  autoFocus={showNotes && !edited?.notes}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.addNotesBtn} onPress={() => setShowNotes(true)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                <Ionicons name="create-outline" size={15} color={Colors.text} />
+                <Text style={[styles.addNotesText, { color: Colors.text }]}>Add notes</Text>
+              </TouchableOpacity>
+            )}
+            </Pressable>
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
