@@ -2,6 +2,7 @@
 // HTML canvas. Web only — native sharing is a phase 2 item.
 import { Colors } from '../constants/colors';
 import { isCardio, cardioTotals, formatPace, distanceUnitFor } from './cardio';
+import { drawRouteInBox } from './routeShare';
 
 const W = 1080;
 const H = 1920;
@@ -86,7 +87,8 @@ function summarise(session, weightUnit) {
 }
 
 // Returns a PNG Blob of the story image
-export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
+// track (optional): outdoor run GPS track — the route outline replaces the exercise list
+export async function renderSessionStory(session, { weightUnit = 'kg', track = null } = {}) {
   const { cardio, stats, rows } = summarise(session, weightUnit);
   const accent = cardio ? Colors.cardio : Colors.primary;
   const accentRgb = cardio ? '34,211,238' : '255,230,0';
@@ -157,34 +159,39 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
   });
   if (stats.length) y += tileH + 72;
 
-  // Exercises
-  ctx.fillStyle = Colors.gray;
-  ctx.font = `700 32px ${FONT}`;
-  ctx.fillText('EXERCISES', PAD, y);
-  y += 64;
-  // Fit as many rows as the space above the footer allows (keeping room for "+N more")
-  const ROW_H = 116;
   const footerTop = H - 310;
-  const room = footerTop - 40 - y;
-  let maxRows = Math.max(1, Math.floor(room / ROW_H));
-  if (rows.length > maxRows) maxRows = Math.max(1, Math.floor((room - 50) / ROW_H));
-  rows.slice(0, maxRows).forEach(row => {
-    ctx.fillStyle = accent;
-    ctx.beginPath();
-    ctx.arc(PAD + 10, y + 24, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = `700 44px ${FONT}`;
-    ctx.fillText(wrap(ctx, row.name, W - PAD * 2 - 50, 1)[0], PAD + 50, y);
-    ctx.fillStyle = Colors.textSecondary;
-    ctx.font = `500 34px ${FONT}`;
-    ctx.fillText(wrap(ctx, row.detail, W - PAD * 2 - 50, 1)[0] || '', PAD + 50, y + 58);
-    y += ROW_H;
-  });
-  if (rows.length > maxRows) {
+  if (track?.points?.length > 1) {
+    // Outdoor runs: the route outline instead of the exercise list
+    drawRouteInBox(ctx, track.points, { x: PAD, y, w: W - PAD * 2, h: footerTop - 60 - y });
+  } else {
+    // Exercises
     ctx.fillStyle = Colors.gray;
-    ctx.font = `600 36px ${FONT}`;
-    ctx.fillText(`+${rows.length - maxRows} more`, PAD + 50, y);
+    ctx.font = `700 32px ${FONT}`;
+    ctx.fillText('EXERCISES', PAD, y);
+    y += 64;
+    // Fit as many rows as the space above the footer allows (keeping room for "+N more")
+    const ROW_H = 116;
+    const room = footerTop - 40 - y;
+    let maxRows = Math.max(1, Math.floor(room / ROW_H));
+    if (rows.length > maxRows) maxRows = Math.max(1, Math.floor((room - 50) / ROW_H));
+    rows.slice(0, maxRows).forEach(row => {
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.arc(PAD + 10, y + 24, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `700 44px ${FONT}`;
+      ctx.fillText(wrap(ctx, row.name, W - PAD * 2 - 50, 1)[0], PAD + 50, y);
+      ctx.fillStyle = Colors.textSecondary;
+      ctx.font = `500 34px ${FONT}`;
+      ctx.fillText(wrap(ctx, row.detail, W - PAD * 2 - 50, 1)[0] || '', PAD + 50, y + 58);
+      y += ROW_H;
+    });
+    if (rows.length > maxRows) {
+      ctx.fillStyle = Colors.gray;
+      ctx.font = `600 36px ${FONT}`;
+      ctx.fillText(`+${rows.length - maxRows} more`, PAD + 50, y);
+    }
   }
 
   // Footer
