@@ -174,8 +174,14 @@ class StorageService {
   async deleteWorkoutSession(id) {
     try {
       const history = await this.getWorkoutHistory();
+      const session = history.find(s => s.id === id);
       const filtered = history.filter(s => s.id !== id);
       await this.saveWorkoutHistory(filtered);
+      // Outdoor runs keep their GPS track in a separate table
+      if (session?.hasTrack) {
+        supabase.from('run_tracks').delete().eq('session_id', String(id))
+          .then(({ error }) => error && console.error('Error deleting run track:', error));
+      }
       return true;
     } catch (error) {
       console.error('Error deleting workout session:', error);

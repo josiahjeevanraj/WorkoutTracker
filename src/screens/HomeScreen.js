@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing,
+  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,6 +15,7 @@ import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';
 import MealLog from '../components/MealLog';
 import DayPicker from '../components/workout/DayPicker';
 import { useFeature } from '../contexts/FeatureFlagsContext';
+import RunTracker from '../components/run/RunTracker';
 import { isCardio, cardioTotals, formatPace, distanceUnitFor } from '../utils/cardio';
 
 const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -91,6 +92,8 @@ const HomeScreen = () => {
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const weightEnabled = useFeature('weight');
   const mealsEnabled = useFeature('meals');
+  const runsEnabled = useFeature('outdoorRuns'); // beta, off by default
+  const [runTrackerOpen, setRunTrackerOpen] = useState(false);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
   const [editingSession, setEditingSession] = useState(null);
@@ -363,6 +366,13 @@ const HomeScreen = () => {
             <Text style={[styles.cardLabel, { color: accent }]}>
               {cardioMode ? (isToday ? "TODAY'S CARDIO" : 'CARDIO') : (isToday ? "TODAY'S LIFTS" : 'LIFTS')}
             </Text>
+            {/* Outdoor run tracking (feature-flagged, live GPS so today only, web for now) */}
+            {cardioMode && runsEnabled && isToday && Platform.OS === 'web' && (
+              <TouchableOpacity onPress={() => setRunTrackerOpen(true)} activeOpacity={0.8} style={styles.runBtn}>
+                <Ionicons name="navigate" size={14} color={Colors.cardio} />
+                <Text style={styles.runBtnText}>Run</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => setLogModalVisible(true)}
               activeOpacity={0.8}
@@ -419,6 +429,15 @@ const HomeScreen = () => {
           onCancel={() => setDayPickerOpen(false)}
         />
       </Modal>
+
+      {runsEnabled && (
+        <RunTracker
+          visible={runTrackerOpen}
+          onClose={() => setRunTrackerOpen(false)}
+          onSaved={reloadHistory}
+          weightUnit={unit}
+        />
+      )}
 
       <LogWorkoutModal
         visible={logModalVisible}
@@ -518,6 +537,13 @@ const styles = StyleSheet.create({
   modeThumb: { position: 'absolute', top: 4, bottom: 4, left: 4, borderRadius: 10 },
   modeOption: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
   modeLabel: { fontSize: 14, fontWeight: '700' },
+
+  runBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto', marginRight: 10,
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999,
+    borderWidth: 1, borderColor: Colors.cardio,
+  },
+  runBtnText: { fontSize: 13, fontWeight: '700', color: Colors.cardio },
 
   // Workouts
   addBtn: {

@@ -9,7 +9,8 @@ import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import DayPicker from './DayPicker';
 import StoryShare from './StoryShare';
-import { isCardio, isIntervalCardio, formatCardioSet } from '../../utils/cardio';
+import { isCardio, isIntervalCardio, formatCardioSet, distanceUnitFor } from '../../utils/cardio';
+import RunDetails from '../run/RunDetails';
 import styles from './workoutStyles';
 
 const toKey = d =>
@@ -162,6 +163,8 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
 
           {/* Exercises */}
           <ScrollView style={styles.expandScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}>
+            {/* Outdoor runs: route map, elevation profile and splits */}
+            {session.hasTrack && <RunDetails sessionId={session.id} distUnit={distanceUnitFor(weightUnit)} />}
             {exercises.length === 0 ? (
               <Text style={styles.noExercisesText}>No exercises recorded</Text>
             ) : exercises.map((ex, i) => (

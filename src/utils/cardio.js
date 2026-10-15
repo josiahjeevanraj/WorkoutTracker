@@ -54,5 +54,7 @@ export const formatCardioSet = set => {
   if (minutes && distance) parts.push(`${fmtPace(minutes, distance)} /${unit}`);
   const incline = parseFloat(set.incline) || 0;
   if (incline > 0) parts.push(`${incline}% incline`);
+  const climb = parseFloat(set.elevationGain) || 0;
+  if (climb > 0) parts.push(`↑${Math.round(climb)} m`);
   return parts.join(' · ') || '—';
 };

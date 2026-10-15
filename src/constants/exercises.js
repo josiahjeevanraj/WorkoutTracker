@@ -158,4 +158,5 @@ export const CARDIO_EXERCISES = [
   "Treadmill Jog",
   "Treadmill Run",
   "Treadmill Sprint Intervals",
+  "Outdoor Run",
 ];
