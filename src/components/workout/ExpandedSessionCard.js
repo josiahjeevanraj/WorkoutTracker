@@ -169,7 +169,13 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
             {/* Notes can be added here without editing; saved when the card closes */}
             {showNotes || notes ? (
               <View style={styles.expandNotesBlock}>
-                <Text style={styles.expandNotesLabel}>Notes</Text>
+                <View style={styles.notesHeader}>
+                  <Text style={[styles.expandNotesLabel, { marginBottom: 0 }]}>Notes</Text>
+                  <TouchableOpacity onPress={() => { setNotes(''); notesRef.current = ''; setShowNotes(false); }} style={styles.removeNotesBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="trash-outline" size={14} color={Colors.softRed} />
+                    <Text style={styles.removeNotesText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.expandNotesInput}
                   value={notes}

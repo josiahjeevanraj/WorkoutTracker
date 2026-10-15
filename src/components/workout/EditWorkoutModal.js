@@ -60,7 +60,13 @@ const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => 
             </View>
             {showNotes || edited?.notes ? (
               <View style={styles.logNotesGroup}>
-                <Text style={styles.detailSectionLabel}>Notes</Text>
+                <View style={styles.notesHeader}>
+                  <Text style={[styles.detailSectionLabel, { marginBottom: 0 }]}>Notes</Text>
+                  <TouchableOpacity onPress={() => { setEdited(prev => ({ ...prev, notes: '' })); setShowNotes(false); }} style={styles.removeNotesBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="trash-outline" size={14} color={Colors.softRed} />
+                    <Text style={styles.removeNotesText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   style={styles.logNotesInput}
                   value={edited?.notes || ''}

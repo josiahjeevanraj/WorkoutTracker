@@ -96,6 +96,9 @@ export default StyleSheet.create({
   logNotesGroup: { marginTop: 20 },
   addNotesBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: 16, paddingVertical: 6 },
   addNotesText: { fontSize: 13, fontWeight: '600' },
+  notesHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  removeNotesBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  removeNotesText: { fontSize: 12, color: Colors.softRed, fontWeight: '600' },
   // Wraps popup content so taps outside an exercise card close it (no pointer cursor on web)
   tapCatcher: { cursor: 'auto' },
   logNotesInput: {

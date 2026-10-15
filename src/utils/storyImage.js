@@ -81,19 +81,8 @@ function summarise(session, weightUnit) {
     };
   }
 
-  // Working sets (warmups excluded)
-  let setCount = 0;
-  exercises.filter(ex => !isCardio(ex)).forEach(ex => (ex.sets || []).forEach(s => {
-    if (!s.warmup) setCount += 1;
-  }));
-  return {
-    cardio,
-    rows,
-    stats: [
-      { label: 'EXERCISES', value: String(exercises.length) },
-      { label: 'SETS', value: String(setCount) },
-    ],
-  };
+  // Lifting sessions show the exercise list only (no stat tiles)
+  return { cardio, rows, stats: [] };
 }
 
 // Returns a PNG Blob of the story image
@@ -145,7 +134,7 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
   // Stat tiles
   const gap = 28;
   const tileW = (W - PAD * 2 - gap * (stats.length - 1)) / stats.length;
-  const tileH = 210;
+  const tileH = stats.length ? 210 : 0;
   stats.forEach((stat, i) => {
     const x = PAD + i * (tileW + gap);
     roundRect(ctx, x, y, tileW, tileH, 36);
@@ -166,7 +155,7 @@ export async function renderSessionStory(session, { weightUnit = 'kg' } = {}) {
     }
     ctx.fillText(stat.value, x + 32, y + 100);
   });
-  y += tileH + 72;
+  if (stats.length) y += tileH + 72;
 
   // Exercises
   ctx.fillStyle = Colors.gray;
@@ -229,8 +218,9 @@ export async function renderSessionSticker(session, { weightUnit = 'kg' } = {}) 
   const nameLines = wrap(ctx, session.name || 'Workout', innerW, 2);
   const tileGap = 20;
   const tileW = (innerW - tileGap * (stats.length - 1)) / stats.length;
-  const tileH = 170;
-  const height = P + 52 + nameLines.length * 88 + 12 + 64 + tileH + 48 + 70 + 56 - 8;
+  const tileH = stats.length ? 170 : 0;
+  const tilesBlock = stats.length ? tileH + 48 : 0;
+  const height = P + 52 + nameLines.length * 88 + 12 + 64 + tilesBlock + 70 + 56 - 8;
   canvas.height = height; // resizing resets the context state
   ctx = canvas.getContext('2d');
   ctx.textBaseline = 'top';
@@ -277,7 +267,7 @@ export async function renderSessionSticker(session, { weightUnit = 'kg' } = {}) 
     }
     ctx.fillText(stat.value, x + 24, y + 82);
   });
-  y += tileH + 48;
+  y += tilesBlock;
 
   ctx.fillStyle = accent;
   roundRect(ctx, P, y, 90, 10, 5);
