@@ -9,6 +9,7 @@ export default StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', marginBottom: 14, textAlign: 'center' },
   expandBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 10 },
   expandedCard: { position: 'absolute', zIndex: 11, backgroundColor: Colors.cardBackground, overflow: 'hidden' },
+  dragHandle: { position: 'absolute', top: 14, alignSelf: 'center', width: 40, height: 5, borderRadius: 3, backgroundColor: Colors.borderColor, zIndex: 1 },
   expandHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: Colors.borderColor },
   expandTime: { fontSize: 12, color: Colors.gray, fontWeight: '500', marginBottom: 4 },
   expandName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF' },

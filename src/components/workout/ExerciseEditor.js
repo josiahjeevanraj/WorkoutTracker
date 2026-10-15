@@ -233,7 +233,14 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
   // One card open at a time, so opening another (or tapping outside) closes it
   const [openKey, setOpenKey] = useState(null);
   const toggleOpen = key => setOpenKey(prev => (prev === key ? null : key));
-  useEffect(() => { if (collapseToken) setOpenKey(null); }, [collapseToken]);
+  // Taps inside a card also reach the parent's tap-outside handler on web, so remember
+  // when a touch started inside a card and ignore a collapse that follows it
+  const insideTapAt = useRef(0);
+  const markInsideTap = () => { insideTapAt.current = Date.now(); };
+  useEffect(() => {
+    if (!collapseToken || Date.now() - insideTapAt.current < 800) return;
+    setOpenKey(null);
+  }, [collapseToken]);
 
   const updateExercise = (key, field, value) =>
     onChange(list => list.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
@@ -330,8 +337,8 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
           <View
             key={ex._key}
             style={[styles.editExerciseBlock, open && { borderColor: accent }]}
-            // Claim taps inside the card so the parent's "tap outside" handler doesn't close it
-            onStartShouldSetResponder={() => true}
+            onPointerDown={markInsideTap}
+            onTouchStart={markInsideTap}
           >
             {/* Card header: tap to expand (or to pick, before an exercise is chosen) */}
             <TouchableOpacity

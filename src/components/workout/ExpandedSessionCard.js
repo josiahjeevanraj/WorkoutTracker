@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Animated, Alert, Platform, Modal,
-  useWindowDimensions,
+  useWindowDimensions, PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -42,6 +42,28 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
     StorageService.updateWorkoutSession(session.id, { notes: latest }).catch(console.error);
     animateOut(() => onClosed?.({ ...session, notes: latest }));
   };
+
+  // Slide down on the header to close: the card follows the drag and is dismissed
+  // past ~a quarter of the screen (or a quick flick), otherwise it springs back
+  const dragY = useRef(new Animated.Value(0)).current;
+  const swipeCloseRef = useRef(null);
+  swipeCloseRef.current = () => {
+    const latest = notesRef.current;
+    StorageService.updateWorkoutSession(session.id, { notes: latest }).catch(console.error);
+    Animated.timing(dragY, { toValue: windowHeight, duration: 200, useNativeDriver: false })
+      .start(() => onClosed?.({ ...session, notes: latest }));
+  };
+  const dismissDistance = windowHeight * 0.25;
+  const dragResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderMove: (_, g) => dragY.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_, g) => {
+      if (g.dy > dismissDistance || g.vy > 0.9) swipeCloseRef.current();
+      else Animated.spring(dragY, { toValue: 0, useNativeDriver: false, tension: 80, friction: 10 }).start();
+    },
+    onPanResponderTerminate: () =>
+      Animated.spring(dragY, { toValue: 0, useNativeDriver: false }).start(),
+  }), [dismissDistance]);
 
   // Close (saving notes) before handing off: a Modal opened while this one is up
   // can end up underneath it on web
@@ -101,15 +123,23 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
 
   return (
     <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={close}>
-      <Animated.View style={[styles.expandBackdrop, { opacity: backdropOp }]}
+      <Animated.View style={[styles.expandBackdrop, {
+        opacity: Animated.multiply(backdropOp, dragY.interpolate({ inputRange: [0, windowHeight], outputRange: [1, 0], extrapolate: 'clamp' })),
+      }]}
         pointerEvents="auto">
         <TouchableOpacity style={{ flex: 1 }} onPress={close} activeOpacity={1} />
       </Animated.View>
       <Animated.View style={[styles.expandedCard, {
         left: animLeft, top: animTop, width: animWidth, height: animHeight, borderRadius: animRadius,
+        transform: [{ translateY: dragY }],
       }]}>
         <Animated.View style={[{ flex: 1 }, { opacity: contentOp }]}>
-          {/* Header */}
+          {/* Header — drag down here to close */}
+          <View
+            {...dragResponder.panHandlers}
+            style={Platform.OS === 'web' ? { touchAction: 'none' } : undefined}
+          >
+          <View style={styles.dragHandle} />
           <View style={styles.expandHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.expandTime}>
@@ -127,6 +157,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
             <TouchableOpacity onPress={close} style={styles.expandCloseBtn}>
               <Ionicons name="close" size={20} color={Colors.gray} />
             </TouchableOpacity>
+          </View>
           </View>
 
           {/* Exercises */}
@@ -184,7 +215,6 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                   placeholderTextColor={Colors.gray}
                   multiline
                   textAlignVertical="top"
-                  autoFocus={showNotes && !notes}
                 />
               </View>
             ) : (

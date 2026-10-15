@@ -76,7 +76,6 @@ const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => 
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
-                  autoFocus={showNotes && !edited?.notes}
                 />
               </View>
             ) : (

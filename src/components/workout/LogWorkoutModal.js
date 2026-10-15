@@ -121,7 +121,6 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
-                  autoFocus={showNotes && !notes}
                 />
               </View>
             ) : (
