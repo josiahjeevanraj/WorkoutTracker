@@ -9,6 +9,8 @@ import ExerciseEditor, { cleanExercises } from './ExerciseEditor';
 import { planToEditorExercises } from './WorkoutPlansModal';
 import { isCardio } from '../../utils/cardio';
 import styles from './workoutStyles';
+import { useRestTimer } from '../../contexts/RestTimerContext';
+import RestTimerBar from '../RestTimerBar';
 
 // targetDate: optional 'YYYY-MM-DD' to log against a past day (from the calendar)
 // mode: optional 'strength' | 'cardio' (Home's toggle) limits exercises and plans
@@ -20,6 +22,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState([]);
+  const restTimer = useRestTimer();
   const [planId, setPlanId] = useState(null);
 
   useEffect(() => {
@@ -64,6 +67,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
       <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.logModal}>
           <Text style={styles.modalTitle}>{mode === 'cardio' ? 'Log Cardio' : 'Log Workout'}</Text>
+          <RestTimerBar />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
             {plans.length > 0 && (
@@ -94,7 +98,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
             />
 
             <Text style={[styles.logSectionLabel, { marginTop: 16 }]}>Exercises</Text>
-            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} accent={accent} />
+            <ExerciseEditor exercises={exercises} onChange={setExercises} defaultUnit={defaultUnit} mode={mode} accent={accent} onSetAdded={restTimer?.startIfEnabled} />
 
             <View style={styles.logNotesGroup}>
               <Text style={styles.logSectionLabel}>Notes</Text>

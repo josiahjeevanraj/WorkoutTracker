@@ -7,10 +7,13 @@ import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import ExerciseEditor, { cleanExercises } from './ExerciseEditor';
 import styles from './workoutStyles';
+import { useRestTimer } from '../../contexts/RestTimerContext';
+import RestTimerBar from '../RestTimerBar';
 
 // Visible while `session` is set; onClose always fires, onSaved only after a successful save
 const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => {
   const [edited, setEdited] = useState(null);
+  const restTimer = useRestTimer();
 
   useEffect(() => {
     setEdited(session
@@ -45,10 +48,11 @@ const EditWorkoutModal = ({ session, onClose, onSaved, defaultUnit = 'kg' }) => 
               <TouchableOpacity onPress={onClose} style={styles.iconButton}><Ionicons name="close" size={24} color={Colors.gray} /></TouchableOpacity>
             </View>
           </View>
+          <RestTimerBar />
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionLabel}>Exercises</Text>
-              {edited && <ExerciseEditor exercises={edited.exercises} onChange={setExercises} defaultUnit={defaultUnit} />}
+              {edited && <ExerciseEditor exercises={edited.exercises} onChange={setExercises} defaultUnit={defaultUnit} onSetAdded={restTimer?.startIfEnabled} />}
             </View>
             <View style={styles.logNotesGroup}>
               <Text style={styles.detailSectionLabel}>Notes</Text>

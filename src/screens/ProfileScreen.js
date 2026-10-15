@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal,
-  TextInput, Image, ActivityIndicator, KeyboardAvoidingView, Platform,
+  TextInput, Image, ActivityIndicator, KeyboardAvoidingView, Platform, Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -10,12 +10,16 @@ import { supabase } from '../services/supabaseClient';
 import { UNIT_OPTIONS, weightUnit } from '../utils/units';
 import WorkoutPlansModal from '../components/workout/WorkoutPlansModal';
 import AvatarCropModal from '../components/AvatarCropModal';
+import { useRestTimer } from '../contexts/RestTimerContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import StorageService from '../services/StorageService';
 
 const fmtDate = iso => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+const REST_OPTIONS = [30, 60, 90, 120, 150, 180, 240, 300];
+const fmtRest = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
 const ProfileScreen = () => {
   const { colors } = useTheme();
@@ -24,6 +28,9 @@ const ProfileScreen = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showUnitsModal, setShowUnitsModal] = useState(false);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const restTimer = useRestTimer();
+  const rest = restTimer?.settings;
   const [history, setHistory] = useState([]);
   const [profile, setProfile] = useState({});
   const [editName, setEditName] = useState('');
@@ -159,6 +166,9 @@ const ProfileScreen = () => {
   const primarySettings = [
     { icon: 'person-outline',  color: colors.primary, title: 'Edit Profile', sub: 'Name, email', onPress: openEditModal },
     { icon: 'clipboard-outline', color: colors.primary, title: 'Workout Plans', sub: 'Templates to prefill your sessions', onPress: () => setShowPlansModal(true) },
+    { icon: 'settings-outline', color: colors.primary, title: 'Settings',
+      sub: rest?.enabled ? `Rest timer on · ${fmtRest(rest.seconds)}` : 'Rest timer off',
+      onPress: () => setShowSettingsModal(true) },
     { icon: 'body-outline',    color: colors.primary, title: 'Units', sub: `${units.label} (${units.weight})`, onPress: () => setShowUnitsModal(true) },
   ];
 
@@ -316,6 +326,77 @@ const ProfileScreen = () => {
         </TouchableOpacity>
       </Modal>
 
+      {/* Settings modal */}
+      <Modal visible={showSettingsModal} transparent animationType="slide" onRequestClose={() => setShowSettingsModal(false)}>
+        <View style={[s.modalOverlay, { backgroundColor: colors.modalBackground }]}>
+          <View style={[s.modalSheet, { backgroundColor: colors.cardBackground, borderColor: colors.borderColor }]}>
+            <View style={s.modalHeader}>
+              <Text style={[s.modalTitle, { color: '#FFFFFF' }]}>Settings</Text>
+              <TouchableOpacity onPress={() => setShowSettingsModal(false)}>
+                <Ionicons name="close-circle" size={28} color={colors.gray} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={[s.inputLabel, { color: colors.gray }]}>REST TIMER</Text>
+              <View style={[s.settingCard, { backgroundColor: colors.background, borderColor: colors.borderColor }]}>
+                <View style={s.switchRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.switchTitle}>Rest timer</Text>
+                    <Text style={[s.switchSub, { color: colors.gray }]}>Counts down each time you add a set while logging</Text>
+                  </View>
+                  <Switch
+                    value={!!rest?.enabled}
+                    onValueChange={v => restTimer.saveSettings({ enabled: v })}
+                    trackColor={{ false: colors.borderColor, true: colors.primary }}
+                    thumbColor="#FFFFFF"
+                    activeThumbColor="#FFFFFF"
+                  />
+                </View>
+
+                {rest?.enabled && (
+                  <>
+                    <Text style={[s.switchSub, { color: colors.gray, marginTop: 16, marginBottom: 8 }]}>Rest length</Text>
+                    <View style={s.restOptions}>
+                      {REST_OPTIONS.map(sec => {
+                        const active = rest.seconds === sec;
+                        return (
+                          <TouchableOpacity
+                            key={sec}
+                            style={[s.restChip, { borderColor: colors.borderColor }, active && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                            onPress={() => restTimer.saveSettings({ seconds: sec })}
+                          >
+                            <Text style={[s.restChipText, { color: active ? colors.onPrimary : '#FFFFFF' }]}>{fmtRest(sec)}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {Platform.OS === 'web' && (
+                      <View style={[s.switchRow, { marginTop: 16 }]}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.switchTitle}>Keep screen awake</Text>
+                          <Text style={[s.switchSub, { color: colors.gray }]}>Stops the phone locking while you rest</Text>
+                        </View>
+                        <Switch
+                          value={!!rest?.keepAwake}
+                          onValueChange={v => restTimer.saveSettings({ keepAwake: v })}
+                          trackColor={{ false: colors.borderColor, true: colors.primary }}
+                          thumbColor="#FFFFFF"
+                          activeThumbColor="#FFFFFF"
+                        />
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+              <Text style={[s.settingNote, { color: colors.gray }]}>
+                The timer runs while the app is open. Lock-screen notifications will come with the app release.
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Units modal */}
       <Modal visible={showUnitsModal} transparent animationType="slide" onRequestClose={() => setShowUnitsModal(false)}>
         <View style={[s.modalOverlay, { backgroundColor: colors.modalBackground }]}>
@@ -463,6 +544,16 @@ const s = StyleSheet.create({
   editMessage: { fontSize: 13, marginBottom: 14 },
   saveBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: 8 },
   saveBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  // Settings modal
+  settingCard: { borderWidth: 1, borderRadius: 14, padding: 14 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  switchTitle: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  switchSub: { fontSize: 12, marginTop: 2 },
+  restOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  restChip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1 },
+  restChipText: { fontSize: 14, fontWeight: '700' },
+  settingNote: { fontSize: 12, marginTop: 12, marginBottom: 8, lineHeight: 17 },
 
   // Units modal
   unitOption: {

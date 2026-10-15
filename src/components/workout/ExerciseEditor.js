@@ -214,7 +214,8 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
 // `mode` ('strength' | 'cardio', optional) limits the picker to that kind of exercise.
 // `setsOptional` (plans) lets exercises have no sets: new ones start without any.
 // `accent` colours highlights (Home's cardio mode passes cyan).
-const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false, accent = Colors.text }) => {
+// `onSetAdded` fires when Add Set / Dup is used (starts the rest timer while logging).
+const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false, accent = Colors.text, onSetAdded }) => {
   const [pickerKey, setPickerKey] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
 
@@ -380,12 +381,12 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
                   exKey={ex._key}
                   canDelete={setsOptional || sets.length > 1}
                   onUpdate={updateSet}
-                  onDuplicate={duplicateSet}
+                  onDuplicate={(exKey, si) => { duplicateSet(exKey, si); onSetAdded?.(); }}
                   onRemove={removeSet}
                   accent={accent}
                 />
               ))}
-              <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => addSet(ex._key, cardio)}>
+              <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => { addSet(ex._key, cardio); onSetAdded?.(); }}>
                 <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
                 <Text style={styles.inlineAddSetText}>Add Set</Text>
               </TouchableOpacity>
