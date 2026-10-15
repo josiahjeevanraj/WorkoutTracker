@@ -1,4 +1,6 @@
 import { supabase } from './supabaseClient';
+import StorageService from './StorageService';
+import { downsample, trackDistance } from '../utils/geo';
 
 // GPS tracks for outdoor runs (table run_tracks, migration 0004), stored apart
 // from the workout history blob because they're large.
@@ -27,4 +29,32 @@ export async function getRunTrack(sessionId) {
 export async function deleteRunTrack(sessionId) {
   const { error } = await supabase.from('run_tracks').delete().eq('session_id', String(sessionId));
   if (error) console.error('Error deleting run track:', error);
+}
+
+// ── Saved routes ─────────────────────────────────────────────────────────────
+// Kept in app_data (@saved_routes) as a simplified line (≤ 400 points), enough
+// to show as a guide when running the route again.
+
+const ROUTE_POINTS = 400;
+
+export const getSavedRoutes = async () => (await StorageService.getSavedRoutes()) || [];
+
+export async function saveRoute(name, sessionId, trackPoints) {
+  const points = downsample(trackPoints, ROUTE_POINTS).map(p => [round(p[0]), round(p[1]), 0, null, p[4] ?? 0]);
+  const route = {
+    id: `${Date.now()}`,
+    name: name.trim() || 'My route',
+    sessionId: String(sessionId),
+    metres: Math.round(trackDistance(trackPoints)),
+    createdAt: new Date().toISOString(),
+    points,
+  };
+  const latest = await getSavedRoutes();
+  const ok = await StorageService.saveSavedRoutes([...latest, route]);
+  return ok ? route : null;
+}
+
+export async function deleteRoute(id) {
+  const latest = await getSavedRoutes();
+  return StorageService.saveSavedRoutes(latest.filter(r => r.id !== id));
 }

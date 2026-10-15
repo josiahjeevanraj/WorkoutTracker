@@ -164,7 +164,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
           {/* Exercises */}
           <ScrollView style={styles.expandScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 100 }}>
             {/* Outdoor runs: route map, elevation profile and splits */}
-            {session.hasTrack && <RunDetails sessionId={session.id} distUnit={distanceUnitFor(weightUnit)} />}
+            {session.hasTrack && <RunDetails sessionId={session.id} distUnit={distanceUnitFor(weightUnit)} title={session.name} />}
             {exercises.length === 0 ? (
               <Text style={styles.noExercisesText}>No exercises recorded</Text>
             ) : exercises.map((ex, i) => (

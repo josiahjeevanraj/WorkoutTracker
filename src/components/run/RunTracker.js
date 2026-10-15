@@ -5,7 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
-import { saveRunTrack } from '../../services/RunTrackService';
+import { saveRunTrack, getSavedRoutes, deleteRoute } from '../../services/RunTrackService';
 import showAlert from '../../utils/showAlert';
 import { distanceUnitFor, convertDistance, formatPace } from '../../utils/cardio';
 import { acceptPoint, trackDistance, haversine, buildElevationProfile, elevationGain, formatDuration } from '../../utils/geo';
@@ -13,6 +13,7 @@ import RouteMap from './RouteMap';
 
 const ACCENT = Colors.cardio;
 const CURRENT_PACE_WINDOW_MS = 30000;
+const OFF_ROUTE_M = 60; // further than this from a followed route counts as off route
 
 const confirmAction = (message, onYes) => {
   if (Platform.OS === 'web') { if (window.confirm(message)) onYes(); return; }
@@ -32,6 +33,9 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const [, setTick] = useState(0);               // re-render every second while running
   const [gapNotice, setGapNotice] = useState(null);
   const [name, setName] = useState('Outdoor Run');
+  const [routes, setRoutes] = useState([]);           // saved routes to follow
+  const [route, setRoute] = useState(null);            // route being followed
+  const [routePickerOpen, setRoutePickerOpen] = useState(false);
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -47,10 +51,20 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const elapsedMs = () => activeMsRef.current + (resumedAtRef.current ? Date.now() - resumedAtRef.current : 0);
 
   const reset = () => {
-    setStatus('ready'); setPoints([]); setGapNotice(null); setName('Outdoor Run');
+    setStatus('ready'); setPoints([]); setGapNotice(null); setName('Outdoor Run'); setRoute(null);
     pointsRef.current = []; segmentRef.current = 0; activeMsRef.current = 0;
     resumedAtRef.current = null; startedAtRef.current = null;
   };
+
+  useEffect(() => {
+    if (visible) getSavedRoutes().then(setRoutes).catch(console.error);
+  }, [visible]);
+
+  const removeRoute = id => confirmAction('Delete this saved route?', async () => {
+    await deleteRoute(id);
+    setRoutes(prev => prev.filter(r => r.id !== id));
+    if (route?.id === id) setRoute(null);
+  });
 
   // Watch GPS while the tracker is open (also warms up the fix before starting)
   useEffect(() => {
@@ -210,6 +224,15 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const signalColor = !fix ? Colors.gray : fix.accuracy <= 10 ? Colors.green : fix.accuracy <= 25 ? Colors.amber : Colors.softRed;
   const mapPoints = points.length ? points : fix ? [[fix.lat, fix.lng, 0, null, 0]] : [];
 
+  // Following a saved route: distance left and whether we've strayed from it
+  const routeLeft = route ? Math.max(0, convertDistance((route.metres - metres) / 1000, 'km', distUnit)) : null;
+  let offRouteBy = null;
+  if (route && fix && status === 'running') {
+    const here = [fix.lat, fix.lng];
+    const nearest = route.points.reduce((min, p) => Math.min(min, haversine(here, p)), Infinity);
+    if (nearest > OFF_ROUTE_M) offRouteBy = Math.round(nearest);
+  }
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
       <View style={s.screen}>
@@ -224,7 +247,22 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
           </TouchableOpacity>
         </View>
 
-        <RouteMap points={mapPoints} follow height={Math.max(220, windowHeight * 0.38)} accent={ACCENT} />
+        <RouteMap points={mapPoints} guide={route?.points} follow height={Math.max(220, windowHeight * 0.38)} accent={ACCENT} />
+
+        {status === 'ready' ? (
+          <TouchableOpacity style={s.routePick} onPress={() => setRoutePickerOpen(true)}>
+            <Ionicons name="map-outline" size={15} color={ACCENT} />
+            <Text style={s.routePickText} numberOfLines={1}>
+              Route: {route ? `${route.name} · ${convertDistance(route.metres / 1000, 'km', distUnit).toFixed(2)} ${distUnit}` : 'None'}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={Colors.gray} />
+          </TouchableOpacity>
+        ) : route && (
+          <Text style={s.routeLeft}>
+            {route.name} · <Text style={{ color: ACCENT }}>{routeLeft.toFixed(2)} {distUnit} left</Text>
+          </Text>
+        )}
+        {offRouteBy && <Text style={[s.notice, { color: Colors.amber }]}>Off route — about {offRouteBy} m from it</Text>}
 
         {gpsError && <Text style={s.notice}>{gpsError}</Text>}
         {gapNotice && (
@@ -292,6 +330,36 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
           )}
         </View>
 
+        {routePickerOpen && (
+          <View style={s.finishOverlay}>
+            <View style={s.finishSheet}>
+              <Text style={s.finishTitle}>Follow a route</Text>
+              <TouchableOpacity style={s.routeRow} onPress={() => { setRoute(null); setName('Outdoor Run'); setRoutePickerOpen(false); }}>
+                <Text style={s.routeName}>None — free run</Text>
+                {!route && <Ionicons name="checkmark" size={18} color={ACCENT} />}
+              </TouchableOpacity>
+              {routes.length === 0 && (
+                <Text style={s.routeEmpty}>No saved routes yet. Save one from a run's session card.</Text>
+              )}
+              {routes.map(r => (
+                <View key={r.id} style={s.routeRow}>
+                  <TouchableOpacity style={{ flex: 1 }} onPress={() => { setRoute(r); setName(r.name); setRoutePickerOpen(false); }}>
+                    <Text style={s.routeName} numberOfLines={1}>{r.name}</Text>
+                    <Text style={s.routeMeta}>{convertDistance(r.metres / 1000, 'km', distUnit).toFixed(2)} {distUnit}</Text>
+                  </TouchableOpacity>
+                  {route?.id === r.id && <Ionicons name="checkmark" size={18} color={ACCENT} />}
+                  <TouchableOpacity onPress={() => removeRoute(r.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 12 }}>
+                    <Ionicons name="trash-outline" size={18} color={Colors.softRed} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <TouchableOpacity style={[s.finishBtn, s.secondary, { marginTop: 14 }]} onPress={() => setRoutePickerOpen(false)}>
+                <Text style={s.finishBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {(status === 'finishing' || status === 'saving') && (
           <View style={s.finishOverlay}>
             <View style={s.finishSheet}>
@@ -345,6 +413,16 @@ const s = StyleSheet.create({
   signalText: { fontSize: 12, color: Colors.gray, fontWeight: '600' },
   closeBtn: { padding: 4 },
   notice: { fontSize: 12, color: Colors.softRed, marginTop: 8 },
+  routePick: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: 12, backgroundColor: Colors.cardBackground, borderWidth: 1, borderColor: Colors.borderColor,
+  },
+  routePickText: { flex: 1, color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  routeLeft: { marginTop: 10, fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  routeRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderTopWidth: 1, borderTopColor: Colors.borderColor },
+  routeName: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
+  routeMeta: { fontSize: 12, color: Colors.gray, marginTop: 2 },
+  routeEmpty: { fontSize: 13, color: Colors.gray, paddingVertical: 10 },
   hint: { fontSize: 12, color: Colors.gray, marginTop: 8 },
   timeBlock: { alignItems: 'center', marginTop: 16 },
   label: { fontSize: 11, color: Colors.gray, fontWeight: '700', letterSpacing: 1 },

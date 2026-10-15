@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   PROGRESS_DATA: '@progress_data',
   FITNESS_DATA: '@fitness_data',
   CUSTOM_EXERCISES: '@custom_exercises',
+  SAVED_ROUTES: '@saved_routes',
 };
 
 let currentUserId = null;
@@ -212,6 +213,15 @@ class StorageService {
 
   async saveCustomExercises(names) {
     return this._set(STORAGE_KEYS.CUSTOM_EXERCISES, names);
+  }
+
+  // Saved outdoor-run routes: [{ id, name, sessionId, metres, createdAt, points }]
+  async getSavedRoutes() {
+    return this._get(STORAGE_KEYS.SAVED_ROUTES, []);
+  }
+
+  async saveSavedRoutes(routes) {
+    return this._set(STORAGE_KEYS.SAVED_ROUTES, routes);
   }
 
   async clearAllData() {
