@@ -4,17 +4,28 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { EXERCISE_LIST, CARDIO_EXERCISES } from '../../constants/exercises';
-import { isCardio, isCardioName, isIntervalCardio, distanceUnitFor, newCardioSet, formatPace } from '../../utils/cardio';
+import { isCardio, isCardioName, isIntervalCardio, distanceUnitFor, newCardioSet, formatPace, formatCardioSet } from '../../utils/cardio';
 import useCustomExercises, { addCustomExercise } from '../../hooks/useCustomExercises';
 import showAlert from '../../utils/showAlert';
 import styles from './workoutStyles';
 
-const newStrengthSet = unit => ({ reps: '', weight: '', warmup: false, unit });
-
-// mode 'cardio' starts the exercise with time/distance rows
+// Exercises start with no sets; rows are added from the exercise card.
+// mode 'cardio' marks it as cardio so its rows are time/distance.
 export const newExercise = (defaultUnit, mode) => (mode === 'cardio'
-  ? { name: '', type: 'cardio', sets: [newCardioSet(distanceUnitFor(defaultUnit))], _key: Date.now().toString() }
-  : { name: '', sets: [newStrengthSet(defaultUnit)], _key: Date.now().toString() });
+  ? { name: '', type: 'cardio', sets: [], _key: Date.now().toString() }
+  : { name: '', sets: [], _key: Date.now().toString() });
+
+// One-line summary for a collapsed exercise card
+const exerciseSummary = (ex, cardio, singleCardio, setsOptional) => {
+  const sets = ex.sets || [];
+  if (!sets.length) return setsOptional ? 'No targets — tap to add' : 'No sets yet — tap to add';
+  if (singleCardio) return formatCardioSet(sets[0]);
+  if (cardio) return `${sets.length} interval${sets.length !== 1 ? 's' : ''}`;
+  const best = sets.reduce((b, st) => ((parseFloat(st.weight) || 0) > (parseFloat(b?.weight) || 0) ? st : b), sets[0]);
+  const w = parseFloat(best.weight) || 0;
+  const bestText = w || best.reps ? ` · best ${w ? `${best.weight}${best.unit || 'kg'}` : 'BW'}${best.reps ? ` × ${best.reps}` : ''}` : '';
+  return `${sets.length} set${sets.length !== 1 ? 's' : ''}${bestText}`;
+};
 
 // Swipe actions shared by strength and cardio set rows
 const SetSwipeable = ({ children, exKey, si, canDelete, onDuplicate, onRemove, accent }) => {
@@ -218,13 +229,19 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
 const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional = false, accent = Colors.text, onSetAdded }) => {
   const [pickerKey, setPickerKey] = useState(null);
   const [pickerSearch, setPickerSearch] = useState('');
+  const [openKeys, setOpenKeys] = useState(() => new Set()); // expanded exercise cards
+  const toggleOpen = key => setOpenKeys(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   const updateExercise = (key, field, value) =>
     onChange(list => list.map(ex => ex._key === key ? { ...ex, [field]: value } : ex));
   const removeExercise = key => onChange(list => list.filter(ex => ex._key !== key));
   // New exercises open the picker straight away; their set rows appear once one is chosen
   const addExercise = () => {
-    const ex = setsOptional ? { ...newExercise(defaultUnit, mode), sets: [] } : newExercise(defaultUnit, mode);
+    const ex = newExercise(defaultUnit, mode);
     onChange(list => [...list, ex]);
     setPickerKey(ex._key);
     setPickerSearch('');
@@ -278,7 +295,7 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
       const { type, ...rest } = ex;
       const next = cardio ? { ...rest, name, type: 'cardio' } : { ...rest, name };
       if (cardio !== isCardio(ex)) {
-        next.sets = setsOptional && !ex.sets?.length ? [] : [cardio ? newCardioSet(distanceUnit) : newStrengthSet(defaultUnit)];
+        next.sets = []; // rows differ between strength and cardio
       } else if (cardio && !isIntervalCardio(next) && next.sets?.length > 1) {
         next.sets = next.sets.slice(0, 1); // single-entry cardio keeps one row
       }
@@ -299,26 +316,49 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
   return (
     <>
       {exercises.map(ex => {
-        const sets = Array.isArray(ex.sets) ? ex.sets : [{ weight: '', reps: '' }];
+        const sets = Array.isArray(ex.sets) ? ex.sets : [];
         const cardio = isCardio(ex);
         const singleCardio = cardio && !isIntervalCardio(ex); // one time/distance/incline entry, no sets
         const SetRow = cardio ? CardioSetRow : SwipeableSetRow;
+        const open = !!ex.name && openKeys.has(ex._key);
+        const openPicker = () => { setPickerKey(pickerKey === ex._key ? null : ex._key); setPickerSearch(''); };
+        // The first row of an exercise isn't a rest, so it doesn't start the timer
+        const addRow = () => { addSet(ex._key, cardio); if (sets.length > 0) onSetAdded?.(); };
+        const addLabel = singleCardio
+          ? (setsOptional ? 'Add target time & distance' : 'Add time & distance')
+          : (setsOptional ? 'Add target set' : 'Add Set');
         return (
-          <View key={ex._key} style={styles.editExerciseBlock}>
+          <View key={ex._key} style={[styles.editExerciseBlock, open && { borderColor: accent }]}>
+            {/* Card header: tap to expand (or to pick, before an exercise is chosen) */}
             <TouchableOpacity
-              style={styles.exPickerRow}
-              onPress={() => { setPickerKey(pickerKey === ex._key ? null : ex._key); setPickerSearch(''); }}
+              style={styles.exCardHeader}
+              onPress={ex.name ? () => toggleOpen(ex._key) : openPicker}
               activeOpacity={0.7}
             >
-              <Ionicons name={cardio ? 'walk-outline' : 'barbell-outline'} size={16} color={ex.name ? accent : Colors.gray} />
-              <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
-                {ex.name || 'Select exercise'}
-              </Text>
-              <Ionicons name={pickerKey === ex._key ? 'chevron-up' : 'chevron-down'} size={16} color={Colors.gray} />
+              <Ionicons name={cardio ? 'walk-outline' : 'barbell-outline'} size={18} color={ex.name ? accent : Colors.gray} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.exPickerText, !ex.name && styles.exPickerPlaceholder]} numberOfLines={1}>
+                  {ex.name || 'Select exercise'}
+                </Text>
+                {!!ex.name && (
+                  <Text style={styles.exCardSummary} numberOfLines={1}>
+                    {exerciseSummary(ex, cardio, singleCardio, setsOptional)}
+                  </Text>
+                )}
+              </View>
+              {!!ex.name && (
+                <TouchableOpacity onPress={openPicker} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.exCardIconBtn}>
+                  <Ionicons name="swap-horizontal" size={18} color={Colors.gray} />
+                </TouchableOpacity>
+              )}
+              {!!ex.name && (
+                <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={Colors.gray} />
+              )}
               <TouchableOpacity onPress={() => removeExercise(ex._key)} style={styles.removeExBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close-circle" size={20} color={Colors.error} />
               </TouchableOpacity>
             </TouchableOpacity>
+
             {pickerKey === ex._key && (
               <View style={styles.inlinePicker}>
                 <View style={styles.inlineSearchRow}>
@@ -359,39 +399,32 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
                 </ScrollView>
               </View>
             )}
-            {!ex.name ? null : sets.length === 0 && (setsOptional || singleCardio) ? (
-              <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => addSet(ex._key, cardio)}>
-                <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
-                <Text style={styles.inlineAddSetText}>
-                  {singleCardio
-                    ? (setsOptional ? 'Add target time & distance (optional)' : 'Add time & distance')
-                    : 'Add target sets (optional)'}
-                </Text>
-              </TouchableOpacity>
-            ) : singleCardio ? (
+
+            {/* Expanded: the sets (or cardio entry) and the add button */}
+            {open && (singleCardio && sets.length > 0 ? (
               <CardioEntry set={sets[0]} exKey={ex._key} onUpdate={updateSet} accent={accent} />
             ) : (
-            <View style={styles.inlineSetsContainer}>
-              <Text style={styles.swipeHint}>← swipe for actions →</Text>
-              {sets.map((set, si) => (
-                <SetRow
-                  key={`${ex._key}-${si}`}
-                  set={set}
-                  si={si}
-                  exKey={ex._key}
-                  canDelete={setsOptional || sets.length > 1}
-                  onUpdate={updateSet}
-                  onDuplicate={(exKey, si) => { duplicateSet(exKey, si); onSetAdded?.(); }}
-                  onRemove={removeSet}
-                  accent={accent}
-                />
-              ))}
-              <TouchableOpacity style={styles.inlineAddSetBtn} onPress={() => { addSet(ex._key, cardio); onSetAdded?.(); }}>
-                <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
-                <Text style={styles.inlineAddSetText}>Add Set</Text>
-              </TouchableOpacity>
-            </View>
-            )}
+              <View style={styles.inlineSetsContainer}>
+                {sets.length > 0 && <Text style={styles.swipeHint}>← swipe for actions →</Text>}
+                {sets.map((set, si) => (
+                  <SetRow
+                    key={`${ex._key}-${si}`}
+                    set={set}
+                    si={si}
+                    exKey={ex._key}
+                    canDelete
+                    onUpdate={updateSet}
+                    onDuplicate={(exKey, si) => { duplicateSet(exKey, si); onSetAdded?.(); }}
+                    onRemove={removeSet}
+                    accent={accent}
+                  />
+                ))}
+                <TouchableOpacity style={styles.inlineAddSetBtn} onPress={addRow}>
+                  <Ionicons name="add-circle-outline" size={15} color={Colors.green} />
+                  <Text style={styles.inlineAddSetText}>{addLabel}</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         );
       })}

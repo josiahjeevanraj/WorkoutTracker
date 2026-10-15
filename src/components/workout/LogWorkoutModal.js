@@ -36,7 +36,7 @@ const LogWorkoutModal = ({ visible, onClose, onSaved, targetDate, defaultUnit = 
   const applyPlan = plan => {
     setPlanId(plan.id);
     setName(plan.name);
-    setExercises(planToEditorExercises(plan, defaultUnit, { fillEmptySets: true }));
+    setExercises(planToEditorExercises(plan, defaultUnit));
   };
 
   const close = () => {
