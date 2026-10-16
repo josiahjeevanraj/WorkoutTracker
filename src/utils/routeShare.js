@@ -3,6 +3,8 @@
 import { Colors } from '../constants/colors';
 import { cumulativeDistances, formatDuration } from './geo';
 import { isCardio, cardioTotals, formatPace, distanceUnitFor } from './cardio';
+import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
+import loadMapLibre from './loadMapLibre';
 
 const FONT = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif';
 const ACCENT = Colors.cardio;
@@ -134,9 +136,7 @@ export async function renderRouteSticker(session, track, { weightUnit = 'kg' } =
 // the route projected onto it. Resolves null if the map can't load in time.
 export async function mapSnapshot(points, W, H, padding = { top: 420, bottom: 640, left: 120, right: 120 }) {
   try {
-    const mod = await import('maplibre-gl');
-    await import('maplibre-gl/dist/maplibre-gl.css');
-    const maplibregl = mod.default || mod;
+    const maplibregl = await loadMapLibre();
     const ratio = 2;
     const container = document.createElement('div');
     Object.assign(container.style, { position: 'fixed', left: '-10000px', top: '0', width: `${W / ratio}px`, height: `${H / ratio}px` });
@@ -193,7 +193,6 @@ async function encodeWithWebCodecs(canvas, drawFrame, totalMs) {
   }
   if (!config) return null;
 
-  const { Muxer, ArrayBufferTarget } = await import('mp4-muxer');
   const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width, height }, fastStart: 'in-memory' });
   let failure = null;
   const encoder = new VideoEncoder({

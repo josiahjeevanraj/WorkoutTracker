@@ -8,7 +8,7 @@ import StorageService from '../../services/StorageService';
 import { saveRunTrack, getSavedRoutes, deleteRoute } from '../../services/RunTrackService';
 import showAlert from '../../utils/showAlert';
 import { distanceUnitFor, convertDistance, formatPace } from '../../utils/cardio';
-import { acceptPoint, trackDistance, haversine, buildElevationProfile, elevationGain, formatDuration } from '../../utils/geo';
+import { acceptPoint, trackDistance, haversine, buildElevationProfile, elevationGain, formatDuration, smoothFix, SMOOTH_WINDOW } from '../../utils/geo';
 import RouteMap from './RouteMap';
 
 const ACCENT = Colors.cardio;
@@ -47,6 +47,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const watchIdRef = useRef(null);
   const wakeLockRef = useRef(null);
   const hiddenAtRef = useRef(null);
+  const rawRef = useRef([]);           // recent raw fixes, averaged to smooth GPS wobble
 
   const elapsedMs = () => activeMsRef.current + (resumedAtRef.current ? Date.now() - resumedAtRef.current : 0);
 
@@ -79,7 +80,10 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
         setFix({ lat: latitude, lng: longitude, accuracy, altitude });
         setGpsError(null);
         if (statusRef.current !== 'running') return;
-        const next = [latitude, longitude, elapsedMs(), altitude ?? null, segmentRef.current];
+        const raw = [latitude, longitude, elapsedMs(), altitude ?? null, segmentRef.current];
+        if (accuracy != null && accuracy > 30) return; // too imprecise to use
+        rawRef.current = [...rawRef.current.slice(-(SMOOTH_WINDOW - 1)), raw];
+        const next = smoothFix(rawRef.current);
         const last = pointsRef.current[pointsRef.current.length - 1];
         if (acceptPoint(last, next, accuracy)) {
           pointsRef.current = [...pointsRef.current, next];
@@ -124,6 +128,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   }, [visible]);
 
   const start = () => {
+    rawRef.current = [];
     startedAtRef.current = new Date();
     resumedAtRef.current = Date.now();
     setStatus('running');
@@ -136,6 +141,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   };
   const resume = () => {
     segmentRef.current += 1; // don't join the line across the pause
+    rawRef.current = [];     // don't average across the pause either
     resumedAtRef.current = Date.now();
     setStatus('running');
     requestWakeLock();

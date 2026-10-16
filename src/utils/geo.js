@@ -14,15 +14,18 @@ export const haversine = (a, b) => {
 
 // Readings worse than this (metres) are dropped
 export const MAX_ACCURACY_M = 30;
-// Faster than this between readings is treated as a GPS jump (≈ 43 km/h)
-const MAX_SPEED_MS = 12;
+// Faster than this between readings is treated as a GPS jump (≈ 29 km/h, above sprinting)
+const MAX_SPEED_MS = 8;
+const MIN_MOVE_M = 3;
 
-// Whether a new fix should be added after `last` (same segment)
+// Whether a new fix should be added after `last` (same segment). A point must be
+// further from the last kept point than the reading's accuracy, so GPS wobble while
+// standing still (or indoors) isn't counted as distance; slow movement still adds up.
 export const acceptPoint = (last, next, accuracy) => {
   if (accuracy != null && accuracy > MAX_ACCURACY_M) return false;
   if (!last || last[4] !== next[4]) return true;
   const d = haversine(last, next);
-  if (d < 2) return false; // standing still / jitter
+  if (d < Math.max(MIN_MOVE_M, accuracy ?? 0)) return false;
   const dt = (next[2] - last[2]) / 1000;
   return dt <= 0 ? false : d / dt <= MAX_SPEED_MS;
 };
@@ -121,4 +124,15 @@ export const formatDuration = totalSeconds => {
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+};
+
+// Average of the recent raw fixes (same segment): smooths GPS wobble so standing
+// still doesn't drift, while real movement still comes through (lags ~2 s)
+export const SMOOTH_WINDOW = 5;
+export const smoothFix = buffer => {
+  const n = buffer.length;
+  const lat = buffer.reduce((s, p) => s + p[0], 0) / n;
+  const lng = buffer.reduce((s, p) => s + p[1], 0) / n;
+  const last = buffer[n - 1];
+  return [lat, lng, last[2], last[3], last[4]];
 };

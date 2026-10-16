@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
+import loadMapLibre from '../../utils/loadMapLibre';
 
 // Route map for outdoor runs (web): MapLibre with free OpenFreeMap tiles (no API key).
-// MapLibre is loaded on demand so it isn't in the main bundle.
+// MapLibre is loaded on demand (self-hosted script) so it isn't in the main bundle.
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
 
 // Points [lat, lng, t, alt, segment] -> GeoJSON MultiLineString (one line per segment)
@@ -30,10 +31,9 @@ const RouteMap = ({ points = [], follow = false, marker = null, guide = null, he
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([import('maplibre-gl'), import('maplibre-gl/dist/maplibre-gl.css')])
-      .then(([mod]) => {
+    loadMapLibre()
+      .then(maplibregl => {
         if (cancelled || !containerRef.current) return;
-        const maplibregl = mod.default || mod;
         const first = points[0];
         const map = new maplibregl.Map({
           container: containerRef.current,
