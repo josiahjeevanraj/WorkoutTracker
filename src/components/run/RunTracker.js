@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator, Platform, useWindowDimensions,
+  View, Text, TextInput, TouchableOpacity, Modal, StyleSheet, ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import { saveRunTrack, getSavedRoutes, deleteRoute } from '../../services/RunTrackService';
-import { startRunLocation, isBackgroundCapable } from '../../services/runLocation';
+import { startRunLocation } from '../../services/runLocation';
 import showAlert from '../../utils/showAlert';
 import { distanceUnitFor, convertDistance, formatPace } from '../../utils/cardio';
 import { acceptPoint, trackDistance, haversine, buildElevationProfile, elevationGain, formatDuration, smoothFix, SMOOTH_WINDOW } from '../../utils/geo';
@@ -17,11 +17,14 @@ const CURRENT_PACE_WINDOW_MS = 30000;
 const OFF_ROUTE_M = 60; // further than this from a followed route counts as off route
 
 const confirmAction = (message, onYes) => {
-  if (Platform.OS === 'web') { if (window.confirm(message)) onYes(); return; }
-  onYes();
+  Alert.alert(message, undefined, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Yes', style: 'destructive', onPress: onYes },
+  ]);
 };
 
-// Live GPS tracker for outdoor runs (web: browser geolocation; keep the screen on).
+// Live GPS tracker for outdoor runs (native app only; RunTracker.web.js is a stub).
+// Tracking continues in the background with "Always" location permission.
 // Saves a cardio session "Outdoor Run" plus its GPS track (RunTrackService).
 const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const { height: windowHeight } = useWindowDimensions();
@@ -32,7 +35,6 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const [fix, setFix] = useState(null);          // latest raw fix: { lat, lng, accuracy, altitude }
   const [gpsError, setGpsError] = useState(null);
   const [, setTick] = useState(0);               // re-render every second while running
-  const [gapNotice, setGapNotice] = useState(null);
   const [name, setName] = useState('Outdoor Run');
   const [routes, setRoutes] = useState([]);           // saved routes to follow
   const [route, setRoute] = useState(null);            // route being followed
@@ -45,8 +47,6 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const activeMsRef = useRef(0);       // active time before the current running stretch
   const resumedAtRef = useRef(null);   // when the current running stretch began
   const startedAtRef = useRef(null);   // wall clock start, for the session date
-  const wakeLockRef = useRef(null);
-  const hiddenAtRef = useRef(null);
   const rawRef = useRef([]);           // recent raw fixes, averaged to smooth GPS wobble
 
   const elapsedMs = () => activeMsRef.current + (resumedAtRef.current ? Date.now() - resumedAtRef.current : 0);
@@ -57,7 +57,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   };
 
   const reset = () => {
-    setStatus('ready'); setPoints([]); setGapNotice(null); setName('Outdoor Run'); setRoute(null);
+    setStatus('ready'); setPoints([]); setName('Outdoor Run'); setRoute(null);
     pointsRef.current = []; segmentRef.current = 0; activeMsRef.current = 0;
     resumedAtRef.current = null; startedAtRef.current = null;
   };
@@ -109,33 +109,12 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
     return () => clearInterval(id);
   }, [status]);
 
-  // Keep the screen awake while tracking, and warn if the page was hidden mid-run
-  const requestWakeLock = async () => {
-    if (Platform.OS !== 'web' || !navigator.wakeLock) return;
-    try { wakeLockRef.current = await navigator.wakeLock.request('screen'); } catch { /* not allowed */ }
-  };
-  const releaseWakeLock = () => { wakeLockRef.current?.release?.().catch(() => {}); wakeLockRef.current = null; };
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !visible) return;
-    const onVisibility = () => {
-      const active = statusRef.current === 'running';
-      if (document.visibilityState === 'hidden') { hiddenAtRef.current = Date.now(); return; }
-      if (active) requestWakeLock();
-      if (active && hiddenAtRef.current && Date.now() - hiddenAtRef.current > 5000) {
-        setGapNotice(`Tracking was interrupted for ${formatDuration((Date.now() - hiddenAtRef.current) / 1000)} — that part of the route may show as a straight line.`);
-      }
-      hiddenAtRef.current = null;
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => { document.removeEventListener('visibilitychange', onVisibility); releaseWakeLock(); };
-  }, [visible]);
 
   const start = () => {
     rawRef.current = [];
     startedAtRef.current = new Date();
     resumedAtRef.current = Date.now();
     setStatus('running');
-    requestWakeLock();
   };
   const pause = () => {
     activeMsRef.current = elapsedMs();
@@ -147,7 +126,6 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
     rawRef.current = [];     // don't average across the pause either
     resumedAtRef.current = Date.now();
     setStatus('running');
-    requestWakeLock();
   };
   const finish = () => {
     if (statusRef.current === 'running') pause();
@@ -155,7 +133,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   };
 
   const close = () => {
-    const done = () => { releaseWakeLock(); reset(); onClose(); };
+    const done = () => { reset(); onClose(); };
     if (status === 'ready') return done();
     confirmAction('Discard this run? It will not be saved.', done);
   };
@@ -209,7 +187,6 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
     }
     const trackSaved = await saveRunTrack(session.id, track, profile);
     if (!trackSaved) showAlert('Route not saved', 'The run was saved, but its map route could not be stored.');
-    releaseWakeLock();
     reset();
     onSaved?.(session);
     onClose();
@@ -274,17 +251,8 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
         {offRouteBy && <Text style={[s.notice, { color: Colors.amber }]}>Off route — about {offRouteBy} m from it</Text>}
 
         {gpsError && <Text style={[s.notice, gpsError.soft && { color: Colors.amber }]}>{gpsError.message}</Text>}
-        {gapNotice && (
-          <TouchableOpacity onPress={() => setGapNotice(null)}>
-            <Text style={[s.notice, { color: Colors.amber }]}>{gapNotice} (tap to dismiss)</Text>
-          </TouchableOpacity>
-        )}
         {status === 'ready' && !gpsError && (
-          <Text style={s.hint}>
-            {isBackgroundCapable
-              ? 'Tracking keeps going with the phone locked or in your pocket.'
-              : 'Keep the screen on during your run — tracking stops if the phone locks.'}
-          </Text>
+          <Text style={s.hint}>Tracking keeps going with the phone locked or in your pocket.</Text>
         )}
 
         <View style={s.timeBlock}>
@@ -403,7 +371,7 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.finishBtn, { backgroundColor: 'transparent' }]}
-                    onPress={() => confirmAction('Discard this run? It will not be saved.', () => { releaseWakeLock(); reset(); onClose(); })}
+                    onPress={() => confirmAction('Discard this run? It will not be saved.', () => { reset(); onClose(); })}
                   >
                     <Text style={[s.finishBtnText, { color: Colors.softRed }]}>Discard</Text>
                   </TouchableOpacity>

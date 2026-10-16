@@ -1,10 +1,10 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
-// Native GPS for outdoor runs. Uses a background location task so tracking
-// continues while the phone is locked (needs "Always" permission; with only
-// "While Using" it falls back to foreground updates). Same interface as
-// runLocation.web.js: startRunLocation(onFix, onError) -> stop().
+// Native GPS for outdoor runs (the web has a no-op runLocation.web.js). Uses a
+// background location task so tracking continues while the phone is locked
+// (needs "Always" permission; with only "While Using" it falls back to
+// foreground updates). startRunLocation(onFix, onError) -> stop().
 // onFix({ latitude, longitude, accuracy, altitude }, timestampMs)
 
 const TASK = 'motion-run-location';
@@ -16,8 +16,6 @@ TaskManager.defineTask(TASK, ({ data, error }) => {
   if (error) { console.error('Run location task error:', error); return; }
   (data?.locations || []).forEach(loc => listeners.forEach(fn => fn(loc.coords, loc.timestamp)));
 });
-
-export const isBackgroundCapable = true;
 
 export async function startRunLocation(onFix, onError) {
   const fg = await Location.requestForegroundPermissionsAsync();
