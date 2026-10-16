@@ -38,6 +38,40 @@ class StorageService {
     }
   }
 
+  // Several keys in one request: { [key]: data } (missing keys -> fallbacks[key])
+  async _getMany(fallbacks) {
+    const keys = Object.keys(fallbacks);
+    if (!currentUserId) return { ...fallbacks };
+    try {
+      const { data, error } = await supabase
+        .from('app_data')
+        .select('key, data')
+        .eq('user_id', currentUserId)
+        .in('key', keys);
+      if (error) throw error;
+      const out = { ...fallbacks };
+      (data || []).forEach(row => { out[row.key] = row.data; });
+      return out;
+    } catch (error) {
+      console.error('Error loading app data:', error);
+      return { ...fallbacks };
+    }
+  }
+
+  // Home's data in a single round trip
+  async getHomeData() {
+    const r = await this._getMany({
+      [STORAGE_KEYS.WORKOUT_HISTORY]: [],
+      [STORAGE_KEYS.USER_PROFILE]: null,
+      [STORAGE_KEYS.FITNESS_DATA]: {},
+    });
+    return {
+      history: r[STORAGE_KEYS.WORKOUT_HISTORY],
+      profile: r[STORAGE_KEYS.USER_PROFILE],
+      fitness: r[STORAGE_KEYS.FITNESS_DATA],
+    };
+  }
+
   async _set(key, value) {
     if (!currentUserId) return false;
     try {

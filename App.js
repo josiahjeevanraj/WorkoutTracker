@@ -1,5 +1,6 @@
 import React from 'react';
-import { View } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
+import { Colors } from './src/constants/colors';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,7 +17,13 @@ const Root = () => {
   const { session, loading } = useAuth();
   const flagsReady = useFeatureFlagsReady();
   // Wait for flags so disabled features don't flash in before hiding
-  if (loading || (session && !flagsReady)) return null;
+  if (loading || (session && !flagsReady)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
   return session ? <AppNavigator /> : <AuthScreen />;
 };
 

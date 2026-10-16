@@ -53,6 +53,9 @@ const AppNavigator = () => {
         screenOptions={{
           swipeEnabled: false,
           animationEnabled: true,
+          // Mount (and fetch data for) a tab only when it's first opened, so startup
+          // isn't competing with every screen's requests at once
+          lazy: true,
         }}
       >
         <Tab.Screen name="Home" component={HomeScreen} />

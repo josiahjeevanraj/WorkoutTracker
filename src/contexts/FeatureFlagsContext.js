@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../services/supabaseClient';
 import { useAuth } from './AuthContext';
 
@@ -16,7 +17,18 @@ export const FeatureFlagsProvider = ({ children }) => {
   useEffect(() => {
     if (!user) { setState({ disabled: new Set(), enabled: new Set(), ready: true }); return; }
     let active = true;
+    const cacheKey = `featureFlags:${user.id}`;
+    const apply = rows => setState({
+      disabled: new Set(rows.filter(r => !r.enabled).map(r => r.flag)),
+      enabled: new Set(rows.filter(r => r.enabled).map(r => r.flag)),
+      ready: true,
+    });
     setState(s => ({ ...s, ready: false }));
+    // Start from this device's last known flags so the app opens without waiting
+    // on the network; only a first sign-in waits for the server
+    AsyncStorage.getItem(cacheKey)
+      .then(cached => { if (active && cached) apply(JSON.parse(cached)); })
+      .catch(() => {});
     supabase
       .from('feature_flags')
       .select('flag, enabled')
@@ -25,9 +37,8 @@ export const FeatureFlagsProvider = ({ children }) => {
         // On error (e.g. table not created yet) fall back to everything enabled
         if (error) console.error('Error loading feature flags:', error);
         const rows = data || [];
-        const disabled = new Set(rows.filter(r => !r.enabled).map(r => r.flag));
-        const enabled = new Set(rows.filter(r => r.enabled).map(r => r.flag));
-        setState({ disabled, enabled, ready: true });
+        apply(rows);
+        if (!error) AsyncStorage.setItem(cacheKey, JSON.stringify(rows)).catch(() => {});
       });
     return () => { active = false; };
   }, [user?.id]);

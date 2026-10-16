@@ -133,11 +133,7 @@ const HomeScreen = () => {
   useFocusEffect(useCallback(() => {
     let active = true;
     (async () => {
-      const [hist, prof, fit] = await Promise.all([
-        StorageService.getWorkoutHistory(),
-        StorageService.getUserProfile(),
-        StorageService.getFitnessData(),
-      ]);
+      const { history: hist, profile: prof, fitness: fit } = await StorageService.getHomeData();
       if (!active) return;
       setHistory(hist || []);
       setProfile(prof);
