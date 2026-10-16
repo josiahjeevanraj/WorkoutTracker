@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing,
+  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -92,7 +92,9 @@ const HomeScreen = () => {
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const weightEnabled = useFeature('weight');
   const mealsEnabled = useFeature('meals');
-  const runsEnabled = useFeature('outdoorRuns'); // beta, off by default
+  // Live run tracking: beta (off by default) and native app only — the web can't
+  // track with the screen locked. Saved runs can still be viewed and shared on web.
+  const runsEnabled = useFeature('outdoorRuns') && Platform.OS !== 'web';
   const [runTrackerOpen, setRunTrackerOpen] = useState(false);
   const [logModalVisible, setLogModalVisible] = useState(false);
   const [expandedCard, setExpandedCard] = useState(null); // { session, rect }
@@ -362,7 +364,7 @@ const HomeScreen = () => {
             <Text style={[styles.cardLabel, { color: accent }]}>
               {cardioMode ? (isToday ? "TODAY'S CARDIO" : 'CARDIO') : (isToday ? "TODAY'S LIFTS" : 'LIFTS')}
             </Text>
-            {/* Outdoor run tracking (feature-flagged, live GPS so today only) */}
+            {/* Outdoor run tracking (feature-flagged, native app only, today only) */}
             {cardioMode && runsEnabled && isToday && (
               <TouchableOpacity onPress={() => setRunTrackerOpen(true)} activeOpacity={0.8} style={styles.runBtn}>
                 <Ionicons name="navigate" size={14} color={Colors.cardio} />
