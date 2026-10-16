@@ -72,7 +72,9 @@ Use `ios/WorkoutTracker.xcworkspace` (CocoaPods workspace). The project has two 
 - `WorkoutTracker` — iOS app (React Native + Expo)
 - `WorkoutTrackerWatch` — watchOS companion app (product type: `com.apple.product-type.application`, SDKROOT: watchos)
 
-The Watch target is a build dependency of the iOS target and is embedded via an "Embed Watch Content" copy files phase (`dstSubfolderSpec = 16`). Bundle IDs: `com.josiahjeevanraj.workouttracker` (iOS), `com.josiahjeevanraj.workouttracker.watchapp` (Watch). Team: `8QD7NVVZHL`.
+**The Watch is currently detached from the iOS build** (phone-only testing; the user will reattach it once app features are final). The `WorkoutTrackerWatch` target and its code remain in the project. To reattach: add the `BB1122334455667700000001` PBXTargetDependency back to the iOS target's `dependencies`, and `CC1122334455667700000001` (WorkoutTrackerWatch.app) back to the "Embed Watch Content" phase's `files` (that phase copies to `$(CONTENTS_FOLDER_PATH)/Watch`, `dstSubfolderSpec = 16`). The phone app's HealthKit entitlements were removed (the phone never used HealthKit; it also blocked free-account signing); the Watch keeps its own. Bundle IDs: `com.josiahjeevanraj.workouttracker` (iOS), `com.josiahjeevanraj.workouttracker.watchapp` (Watch). Team: `8QD7NVVZHL`.
+
+**Xcode 27**: the Podfile `post_install` raises pods below iOS 15.1 to 15.1, and the Watch target's minimum is watchOS 9.0 (Xcode 27 rejects lower targets and `armv7k`). Unsigned compile check: `xcodebuild -workspace ios/WorkoutTracker.xcworkspace -scheme WorkoutTracker -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`. `npx expo run:ios` can't find the Simulator on Xcode 27; build to a device from Xcode instead.
 
 **Important**: Do not run `expo prebuild` — it will overwrite the manually configured `ios/` directory and undo the Watch target setup.
 
