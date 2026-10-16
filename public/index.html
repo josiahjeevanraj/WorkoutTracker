@@ -13,7 +13,20 @@
       html,
       body {
         height: 100%;
+        background: #0E0E0E; /* app background: no white flash while the bundle loads */
       }
+      /* Start screen shown until the app first renders (App.js removes it) */
+      #splash {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        background: #0E0E0E;
+      }
+      #splash span {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid rgba(255, 230, 0, 0.25); border-top-color: #FFE600;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
       /* These styles disable body scrolling if you are using <ScrollView> */
       body {
         overflow: hidden;
@@ -31,6 +44,7 @@
     <noscript>
       You need to enable JavaScript to run this app.
     </noscript>
+    <div id="splash"><span></span></div>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
   </body>

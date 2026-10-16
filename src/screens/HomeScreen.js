@@ -6,7 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import StorageService from '../services/StorageService';
+import StorageService, { getCurrentUserId } from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import { weightUnit, kgToDisplay, displayToKg } from '../utils/units';
 import LogWorkoutModal from '../components/workout/LogWorkoutModal';
@@ -134,13 +134,24 @@ const HomeScreen = () => {
 
   useFocusEffect(useCallback(() => {
     let active = true;
-    (async () => {
-      const { history: hist, profile: prof, fitness: fit } = await StorageService.getHomeData();
-      if (!active) return;
+    const apply = ({ history: hist, profile: prof, fitness: fit }) => {
       setHistory(hist || []);
       setProfile(prof);
       setFitnessData(fit || {});
       setLoading(false);
+    };
+    (async () => {
+      // Show this device's last copy straight away, then refresh from the server
+      const cacheKey = `homeCache:${getCurrentUserId()}`;
+      let fresh = false;
+      AsyncStorage.getItem(cacheKey)
+        .then(raw => { if (active && !fresh && raw) apply(JSON.parse(raw)); })
+        .catch(() => {});
+      const data = await StorageService.getHomeData();
+      fresh = true;
+      if (!active) return;
+      apply(data);
+      AsyncStorage.setItem(cacheKey, JSON.stringify(data)).catch(() => {});
     })();
     return () => { active = false; };
   }, []));

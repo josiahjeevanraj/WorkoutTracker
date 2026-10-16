@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Colors } from './src/constants/colors';
 import { StatusBar } from 'expo-status-bar';
@@ -28,6 +28,9 @@ const Root = () => {
 };
 
 export default function App() {
+  // Web: remove the start screen from index.html once the app has rendered
+  useEffect(() => { if (typeof document !== 'undefined') document.getElementById('splash')?.remove(); }, []);
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
