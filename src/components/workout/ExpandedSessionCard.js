@@ -22,7 +22,14 @@ const formatTime = iso =>
 // Full-screen hero that grows out of the tapped card. Rendered in a Modal so it
 // fills the window regardless of the parent's layout (rect: page position from measure()).
 const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCopied, weightUnit = 'kg' }) => {
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  // Size the card from the window when it opened: on iOS Safari the keyboard shrinks
+  // the reported height, which would collapse the card under the notes field. Only
+  // follow real changes (rotation, or the height growing back).
+  const live = useWindowDimensions();
+  const sizeRef = useRef({ width: live.width, height: live.height });
+  if (live.width !== sizeRef.current.width) sizeRef.current = { width: live.width, height: live.height };
+  else if (live.height > sizeRef.current.height) sizeRef.current = { ...sizeRef.current, height: live.height };
+  const { width: windowWidth, height: windowHeight } = sizeRef.current;
   const anim = useRef(new Animated.Value(0)).current;
   const [notes, setNotes] = useState(session.notes || '');
   const notesRef = useRef(session.notes || '');
