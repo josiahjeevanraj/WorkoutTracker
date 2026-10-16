@@ -37,5 +37,6 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
-/ios
+# ios/ is committed: this is a bare workflow with a hand-configured Watch target
+# (never run `expo prebuild`); ios/.gitignore excludes Pods, build and user state.
 /android
