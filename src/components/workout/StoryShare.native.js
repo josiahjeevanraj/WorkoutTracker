@@ -3,30 +3,31 @@ import {
   View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet, useWindowDimensions, NativeModules,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { captureRef, releaseCapture } from 'react-native-view-shot';
+import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import * as Clipboard from 'expo-clipboard';
 import MapView from 'react-native-maps';
 import { Colors } from '../../constants/colors';
 import { getRunTrack } from '../../services/RunTrackService';
-import { isCardio } from '../../utils/cardio';
 import { downsample } from '../../utils/geo';
-import { runStats } from '../../utils/routeGeometry';
+import { runStats, ANIMATION } from '../../utils/routeGeometry';
+import { isCardio, formatPace } from '../../utils/cardio';
 import showAlert from '../../utils/showAlert';
 import { StoryDesign, StickerDesign, RouteDesign, AnimationFrame } from '../share/ShareDesigns';
 
 // Native share preview (the web version draws on a canvas — see StoryShare.js).
 // Images are native views captured with react-native-view-shot at screen scale
 // (a 360-pt story at 3× = 1080×1920); the animation is captured frame by frame
-// and written to MP4 by the MotionVideoWriter native module.
+// is drawn and encoded natively by the RouteVideoRenderer module (Core Graphics +
+// AVAssetWriter), from the map snapshot and the route projected onto it.
 
-const { MotionVideoWriter } = NativeModules;
+const { RouteVideoRenderer } = NativeModules;
 
 const STORY = { w: 360, h: 640 };
-const FPS = 24;
-const DRAW_MS = 7000;
-const HOLD_MS = 2000;
+const FPS = 30;
+const VIDEO_SCALE = 3; // the 360-pt design -> 1080×1920 video
+const { DRAW_MS, HOLD_MS } = ANIMATION;
 
 const baseFormats = [
   { id: 'story', label: 'Story', kind: 'image' },
@@ -46,9 +47,7 @@ const HINTS = {
   animation: 'Your route drawing over the map — share it as a story video',
 };
 
-const nextPaint = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 const wait = ms => new Promise(r => setTimeout(r, ms));
-const getImageSize = uri => new Promise((res, rej) => Image.getSize(uri, (w, h) => res({ w, h }), rej));
 
 // Shows a fixed-size design scaled down to fit, without changing what gets captured
 const Scaled = ({ w, h, maxW, maxH, transparent, children }) => {
@@ -73,7 +72,6 @@ const StoryShare = ({ session, weightUnit, onClose }) => {
   // Animation state
   const mapRef = useRef(null);
   const [anim, setAnim] = useState({ mapUri: null, proj: [], ready: false });
-  const [frame, setFrame] = useState({ progress: 1, footer: 1 });
   const [videoUri, setVideoUri] = useState(null);
 
   const exercises = session.exercises || [];
@@ -144,7 +142,7 @@ const StoryShare = ({ session, weightUnit, onClose }) => {
     await wait(1800); // let tiles load
     try {
       const mapUri = await map.takeSnapshot({ format: 'png', quality: 1, result: 'file' });
-      const sample = downsample(track.points, 250);
+      const sample = downsample(track.points, 400);
       const proj = [];
       for (const p of sample) {
         // eslint-disable-next-line no-await-in-loop
@@ -159,40 +157,36 @@ const StoryShare = ({ session, weightUnit, onClose }) => {
   };
 
   const createVideo = async () => {
-    if (!MotionVideoWriter) { showAlert('Not available', 'Rebuild the app to enable video export.'); return; }
+    if (!RouteVideoRenderer) { showAlert('Not available', 'Rebuild the app to enable video export.'); return; }
     setVideoUri(null);
-    const total = Math.round(((DRAW_MS + HOLD_MS) / 1000) * FPS);
-    let started = false;
+    setBusy('Creating video…');
     try {
-      for (let i = 0; i < total; i++) {
-        const ms = (i * 1000) / FPS;
-        const p = Math.min(1, ms / DRAW_MS);
-        setFrame({ progress: 1 - Math.pow(1 - p, 2), footer: Math.min(1, Math.max(0, (ms - DRAW_MS) / 500)) });
-        setBusy(`Creating video… ${Math.round((i / total) * 100)}%`);
-        // eslint-disable-next-line no-await-in-loop
-        await nextPaint();
-        // eslint-disable-next-line no-await-in-loop
-        const uri = await captureRef(designRef, { format: 'jpg', quality: 0.92, result: 'tmpfile' });
-        if (!started) {
-          // eslint-disable-next-line no-await-in-loop
-          const { w, h } = await getImageSize(uri);
-          const dir = uri.slice(0, uri.lastIndexOf('/') + 1);
-          // eslint-disable-next-line no-await-in-loop
-          await MotionVideoWriter.start(`${dir}motion-run-${Date.now()}.mp4`, w, h, FPS);
-          started = true;
-        }
-        // eslint-disable-next-line no-await-in-loop
-        await MotionVideoWriter.appendFrame(uri);
-        releaseCapture(uri);
-      }
-      const out = await MotionVideoWriter.finish();
+      const stats = runStats(session, weightUnit);
+      const out = await RouteVideoRenderer.render({
+        width: STORY.w * VIDEO_SCALE,
+        height: STORY.h * VIDEO_SCALE,
+        fps: FPS,
+        drawMs: DRAW_MS,
+        holdMs: HOLD_MS,
+        mapPath: anim.mapUri,
+        points: anim.proj.map(p => [p.x * VIDEO_SCALE, p.y * VIDEO_SCALE, p.seg]),
+        kicker: 'OUTDOOR RUN',
+        title: session.name || 'Outdoor Run',
+        date: new Date(session.completedAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
+        attribution: anim.mapUri ? 'Map: Apple Maps' : undefined,
+        distance: stats.distance,
+        unit: stats.unit,
+        durationSec: stats.duration * 60,
+        pace: stats.pace ? `${formatPace(stats.pace)} /${stats.unit}` : '—',
+        accent: Colors.cardio,
+        green: Colors.green,
+      });
       setVideoUri(out);
     } catch (err) {
       console.error(err);
       showAlert('Could not create video', String(err?.message || err));
     }
     setBusy(null);
-    setFrame({ progress: 1, footer: 1 });
   };
 
   // ── Preview ──
@@ -239,8 +233,8 @@ const StoryShare = ({ session, weightUnit, onClose }) => {
             width={STORY.w}
             mapUri={anim.mapUri}
             proj={anim.proj}
-            progress={frame.progress}
-            footerOpacity={frame.footer}
+            progress={1}
+            footerOpacity={1}
             stats={runStats(session, weightUnit)}
           />
         )}

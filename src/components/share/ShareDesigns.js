@@ -3,7 +3,7 @@ import { View, Text, Image, StyleSheet } from 'react-native';
 import Svg, { Defs, RadialGradient, LinearGradient, Stop, Rect, Path, Circle } from 'react-native-svg';
 import { Colors } from '../../constants/colors';
 import { summariseSession } from '../../utils/sessionSummary';
-import { projectRoute, routePath, runStats } from '../../utils/routeGeometry';
+import { projectRoute, routePath, runStats, indexAtShare } from '../../utils/routeGeometry';
 import { formatDuration } from '../../utils/geo';
 import { formatPace } from '../../utils/cardio';
 
@@ -185,7 +185,7 @@ export const RouteDesign = React.forwardRef(({ session, track, weightUnit, width
 export const AnimationFrame = React.forwardRef(({ session, weightUnit, width = 360, mapUri, proj, progress, footerOpacity = 0, stats }, ref) => {
   const k = width / 1080;
   const H = width * 16 / 9;
-  const { d, head } = routePath(proj, progress * (proj.length - 1));
+  const { d, head } = routePath(proj, indexAtShare(proj, progress));
   return (
     <View ref={ref} collapsable={false} style={{ width, height: H, backgroundColor: Colors.background, overflow: 'hidden' }}>
       {mapUri && <Image source={{ uri: mapUri }} style={{ position: 'absolute', left: 0, top: 0, width, height: H }} />}

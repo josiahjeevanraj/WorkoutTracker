@@ -6,7 +6,7 @@ export { projectRoute, runStats } from './routeGeometry';
 import { Colors } from '../constants/colors';
 import { cumulativeDistances, formatDuration } from './geo';
 import { formatPace } from './cardio';
-import { projectRoute, runStats } from './routeGeometry';
+import { projectRoute, runStats, ANIMATION, easeInOut } from './routeGeometry';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import loadMapLibre from './loadMapLibre';
 
@@ -234,7 +234,7 @@ export const canRecordVideo = () => typeof window !== 'undefined' && (
 // Resolves { blob, mimeType, ext }. `useMap: false` skips the map background.
 export async function renderRouteAnimation(session, track, { weightUnit = 'kg', onStatus, useMap = true } = {}) {
   const W = 1080, H = 1920;
-  const DRAW_MS = 7000, HOLD_MS = 2000;
+  const { DRAW_MS, HOLD_MS } = ANIMATION;
   const stats = runStats(session, weightUnit);
 
   onStatus?.('Loading map…');
@@ -256,7 +256,7 @@ export async function renderRouteAnimation(session, track, { weightUnit = 'kg', 
 
   const drawFrame = elapsed => {
     const p = Math.min(1, elapsed / DRAW_MS);
-    const eased = 1 - Math.pow(1 - p, 2); // ease-out
+    const eased = easeInOut(p);
     ctx.textBaseline = 'top';
     if (snap) ctx.drawImage(snap.image, 0, 0);
     else { ctx.fillStyle = Colors.background; ctx.fillRect(0, 0, W, H); }

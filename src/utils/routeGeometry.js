@@ -18,6 +18,27 @@ export function projectRoute(points, box, pad = 0) {
   return points.map((p, i) => ({ x: offX + (xs[i] - minX) * scale, y: offY + (ys[i] - minY) * scale, seg: p[4] ?? 0 }));
 }
 
+// Route animation timing, shared by the web and native videos
+export const ANIMATION = { DRAW_MS: 12000, HOLD_MS: 2500 };
+
+// Gentle ease-in-out for the drawing progress (0..1)
+export const easeInOut = p => 0.5 - Math.cos(Math.min(1, Math.max(0, p)) * Math.PI) / 2;
+
+// Fractional index into projected points at a share (0..1) of the route's drawn
+// length, so the head moves at a steady speed however unevenly GPS points are spaced
+export function indexAtShare(proj, share) {
+  if (proj.length < 2) return 0;
+  const cum = [0];
+  for (let i = 1; i < proj.length; i++) {
+    const same = proj[i].seg === proj[i - 1].seg;
+    cum.push(cum[i - 1] + (same ? Math.hypot(proj[i].x - proj[i - 1].x, proj[i].y - proj[i - 1].y) : 0));
+  }
+  const target = Math.min(1, Math.max(0, share)) * cum[cum.length - 1];
+  const i = cum.findIndex(c => c >= target);
+  if (i <= 0) return 0;
+  return i - 1 + (target - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+}
+
 // Path for the route up to `upto` (fractional index), split at segment breaks.
 // Returns { d, head } where d is an SVG path and head the drawn end point.
 export function routePath(proj, upto = proj.length - 1) {
