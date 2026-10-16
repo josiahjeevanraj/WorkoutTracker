@@ -156,12 +156,10 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
               </Text>
               <Text style={styles.expandName}>{session.name}</Text>
             </View>
-            {/* Story image sharing uses the browser's canvas + share sheet (web only for now) */}
-            {Platform.OS === 'web' && (
-              <TouchableOpacity onPress={() => setShareOpen(true)} style={styles.expandCloseBtn}>
-                <Ionicons name="share-outline" size={18} color={Colors.text} />
-              </TouchableOpacity>
-            )}
+            {/* Share as a story image / sticker / run animation (StoryShare.js on web, .native.js in the app) */}
+            <TouchableOpacity onPress={() => setShareOpen(true)} style={styles.expandCloseBtn}>
+              <Ionicons name="share-outline" size={18} color={Colors.text} />
+            </TouchableOpacity>
             <TouchableOpacity onPress={close} style={styles.expandCloseBtn}>
               <Ionicons name="close" size={20} color={Colors.gray} />
             </TouchableOpacity>

@@ -1,8 +1,12 @@
+// Re-exported for existing imports
+export { projectRoute, runStats } from './routeGeometry';
+
 // Share formats for outdoor runs (web only): the route outline as a transparent
 // PNG, the route on a story image, and a Strava-style animated video.
 import { Colors } from '../constants/colors';
 import { cumulativeDistances, formatDuration } from './geo';
-import { isCardio, cardioTotals, formatPace, distanceUnitFor } from './cardio';
+import { formatPace } from './cardio';
+import { projectRoute, runStats } from './routeGeometry';
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import loadMapLibre from './loadMapLibre';
 
@@ -10,22 +14,6 @@ const FONT = '-apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-s
 const ACCENT = Colors.cardio;
 
 // ── Geometry ────────────────────────────────────────────────────────────────
-
-// Fit [lat, lng, ...] points into a box, keeping the shape (equirectangular)
-export function projectRoute(points, box, pad = 0) {
-  if (!points.length) return [];
-  const midLat = points.reduce((s, p) => s + p[0], 0) / points.length;
-  const kx = Math.cos((midLat * Math.PI) / 180);
-  const xs = points.map(p => p[1] * kx);
-  const ys = points.map(p => -p[0]);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const w = box.w - pad * 2, h = box.h - pad * 2;
-  const scale = Math.min(w / (maxX - minX || 1e-9), h / (maxY - minY || 1e-9));
-  const offX = box.x + pad + (w - (maxX - minX) * scale) / 2;
-  const offY = box.y + pad + (h - (maxY - minY) * scale) / 2;
-  return points.map((p, i) => ({ x: offX + (xs[i] - minX) * scale, y: offY + (ys[i] - minY) * scale, seg: p[4] ?? 0 }));
-}
 
 // Draws the route up to `upto` (fractional index) with a soft glow
 export function drawRoute(ctx, proj, upto = proj.length - 1, { color = ACCENT, width = 10 } = {}) {
@@ -72,16 +60,6 @@ const dot = (ctx, p, r, fill) => {
 
 // ── Stats ───────────────────────────────────────────────────────────────────
 
-export function runStats(session, weightUnit) {
-  const unit = distanceUnitFor(weightUnit);
-  let distance = 0, duration = 0;
-  (session.exercises || []).filter(isCardio).forEach(ex => {
-    const t = cardioTotals(ex, unit);
-    distance += t.distance;
-    duration += t.duration;
-  });
-  return { unit, distance, duration, pace: distance && duration ? duration / distance : null };
-}
 
 const statTriplet = (stats, progress = 1) => [
   { label: 'DISTANCE', value: `${(stats.distance * progress).toFixed(2)} ${stats.unit}` },

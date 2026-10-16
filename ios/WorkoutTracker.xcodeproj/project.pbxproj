@@ -18,6 +18,8 @@
 		6D8ED0C9729225AA277E2ADE /* libPods-WorkoutTracker.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 70276679121E454E66CD7122 /* libPods-WorkoutTracker.a */; };
 		86D4C7C8DCAB3DD05020C114 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A1BDF06717FC7904012DED /* PrivacyInfo.xcprivacy */; };
 		8FD95E8831CDF48B7A7A9530 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = C760750AC626382B7C16D3A5 /* WatchBridge.swift */; };
+		A1B2C3D4E5F6071829304153 /* MotionVideoWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304151 /* MotionVideoWriter.swift */; };
+		A1B2C3D4E5F6071829304154 /* MotionVideoWriter.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829304152 /* MotionVideoWriter.m */; };
 		AFE5B79E3A98E477694B4978 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 35A1BDF06717FC7904012DED /* PrivacyInfo.xcprivacy */; };
 		B53E954A381B04C4B02B17D0 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5538493CD2008646E972CC2 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
@@ -55,6 +57,8 @@
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		C5538493CD2008646E972CC2 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-WorkoutTracker/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		C760750AC626382B7C16D3A5 /* WatchBridge.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchBridge.swift; path = WorkoutTracker/WatchBridge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304151 /* MotionVideoWriter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MotionVideoWriter.swift; path = WorkoutTracker/MotionVideoWriter.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6071829304152 /* MotionVideoWriter.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = MotionVideoWriter.m; path = WorkoutTracker/MotionVideoWriter.m; sourceTree = "<group>"; };
 		CFE083DB3C6C25CFFD2360EB /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/WatchOS.platform/Developer/SDKs/WatchOS11.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		D3E12F5EE936D4F91C9E1A52 /* WorkoutTrackerWatchApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = WorkoutTrackerWatchApp.swift; sourceTree = "<group>"; };
 		E1A8B8460152E911A2D575DB /* WatchBridge.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; name = WatchBridge.m; path = WorkoutTracker/WatchBridge.m; sourceTree = "<group>"; };
@@ -114,6 +118,8 @@
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				E1A8B8460152E911A2D575DB /* WatchBridge.m */,
 				C760750AC626382B7C16D3A5 /* WatchBridge.swift */,
+				A1B2C3D4E5F6071829304152 /* MotionVideoWriter.m */,
+				A1B2C3D4E5F6071829304151 /* MotionVideoWriter.swift */,
 				35A1BDF06717FC7904012DED /* PrivacyInfo.xcprivacy */,
 			);
 			name = WorkoutTracker;
@@ -438,6 +444,8 @@
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				39BDE38F71999DA286F0FEC1 /* WatchBridge.m in Sources */,
 				8FD95E8831CDF48B7A7A9530 /* WatchBridge.swift in Sources */,
+				A1B2C3D4E5F6071829304154 /* MotionVideoWriter.m in Sources */,
+				A1B2C3D4E5F6071829304153 /* MotionVideoWriter.swift in Sources */,
 				B53E954A381B04C4B02B17D0 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

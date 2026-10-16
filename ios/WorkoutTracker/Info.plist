@@ -72,6 +72,8 @@
 	<string>Automatic</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Motion saves your workout story images and run videos to your Photos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app uses your photo library so you can choose a profile picture.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
