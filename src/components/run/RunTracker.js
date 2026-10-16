@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import { saveRunTrack, getSavedRoutes, deleteRoute } from '../../services/RunTrackService';
+import { startRunLocation, isBackgroundCapable } from '../../services/runLocation';
 import showAlert from '../../utils/showAlert';
 import { distanceUnitFor, convertDistance, formatPace } from '../../utils/cardio';
 import { acceptPoint, trackDistance, haversine, buildElevationProfile, elevationGain, formatDuration, smoothFix, SMOOTH_WINDOW } from '../../utils/geo';
@@ -44,12 +45,16 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
   const activeMsRef = useRef(0);       // active time before the current running stretch
   const resumedAtRef = useRef(null);   // when the current running stretch began
   const startedAtRef = useRef(null);   // wall clock start, for the session date
-  const watchIdRef = useRef(null);
   const wakeLockRef = useRef(null);
   const hiddenAtRef = useRef(null);
   const rawRef = useRef([]);           // recent raw fixes, averaged to smooth GPS wobble
 
   const elapsedMs = () => activeMsRef.current + (resumedAtRef.current ? Date.now() - resumedAtRef.current : 0);
+  // Active time at a fix's timestamp; null if the fix predates the current running stretch
+  const elapsedAt = ts => {
+    if (!resumedAtRef.current || !ts) return resumedAtRef.current ? elapsedMs() : null;
+    return ts < resumedAtRef.current ? null : activeMsRef.current + (ts - resumedAtRef.current);
+  };
 
   const reset = () => {
     setStatus('ready'); setPoints([]); setGapNotice(null); setName('Outdoor Run'); setRoute(null);
@@ -67,21 +72,23 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
     if (route?.id === id) setRoute(null);
   });
 
-  // Watch GPS while the tracker is open (also warms up the fix before starting)
+  // Watch GPS while the tracker is open (also warms up the fix before starting).
+  // Native keeps tracking in the background; points use each fix's own timestamp
+  // because iOS can deliver background locations in batches.
   useEffect(() => {
     if (!visible) return;
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setGpsError('Location is not available in this browser.');
-      return;
-    }
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      pos => {
-        const { latitude, longitude, accuracy, altitude } = pos.coords;
+    let stop = () => {};
+    let cancelled = false;
+    startRunLocation(
+      (coords, timestamp) => {
+        const { latitude, longitude, accuracy, altitude } = coords;
         setFix({ lat: latitude, lng: longitude, accuracy, altitude });
-        setGpsError(null);
+        setGpsError(prev => (prev?.soft ? prev : null));
         if (statusRef.current !== 'running') return;
-        const raw = [latitude, longitude, elapsedMs(), altitude ?? null, segmentRef.current];
         if (accuracy != null && accuracy > 30) return; // too imprecise to use
+        const t = elapsedAt(timestamp);
+        if (t == null) return; // from before this running stretch
+        const raw = [latitude, longitude, t, altitude ?? null, segmentRef.current];
         rawRef.current = [...rawRef.current.slice(-(SMOOTH_WINDOW - 1)), raw];
         const next = smoothFix(rawRef.current);
         const last = pointsRef.current[pointsRef.current.length - 1];
@@ -90,13 +97,9 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
           setPoints(pointsRef.current);
         }
       },
-      err => setGpsError(err.code === 1 ? 'Location permission was denied. Allow it in your browser settings.' : 'Waiting for GPS…'),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
-    );
-    return () => {
-      if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    };
+      err => setGpsError(err),
+    ).then(fn => { if (cancelled) fn(); else stop = fn; });
+    return () => { cancelled = true; stop(); };
   }, [visible]);
 
   // Clock tick
@@ -270,14 +273,18 @@ const RunTracker = ({ visible, onClose, onSaved, weightUnit = 'kg' }) => {
         )}
         {offRouteBy && <Text style={[s.notice, { color: Colors.amber }]}>Off route — about {offRouteBy} m from it</Text>}
 
-        {gpsError && <Text style={s.notice}>{gpsError}</Text>}
+        {gpsError && <Text style={[s.notice, gpsError.soft && { color: Colors.amber }]}>{gpsError.message}</Text>}
         {gapNotice && (
           <TouchableOpacity onPress={() => setGapNotice(null)}>
             <Text style={[s.notice, { color: Colors.amber }]}>{gapNotice} (tap to dismiss)</Text>
           </TouchableOpacity>
         )}
         {status === 'ready' && !gpsError && (
-          <Text style={s.hint}>Keep the screen on during your run — tracking stops if the phone locks.</Text>
+          <Text style={s.hint}>
+            {isBackgroundCapable
+              ? 'Tracking keeps going with the phone locked or in your pocket.'
+              : 'Keep the screen on during your run — tracking stops if the phone locks.'}
+          </Text>
         )}
 
         <View style={s.timeBlock}>

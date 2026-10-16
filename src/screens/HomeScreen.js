@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing, Platform,
+  ActivityIndicator, TextInput, Keyboard, Modal, Animated, Easing,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -366,8 +366,8 @@ const HomeScreen = () => {
             <Text style={[styles.cardLabel, { color: accent }]}>
               {cardioMode ? (isToday ? "TODAY'S CARDIO" : 'CARDIO') : (isToday ? "TODAY'S LIFTS" : 'LIFTS')}
             </Text>
-            {/* Outdoor run tracking (feature-flagged, live GPS so today only, web for now) */}
-            {cardioMode && runsEnabled && isToday && Platform.OS === 'web' && (
+            {/* Outdoor run tracking (feature-flagged, live GPS so today only) */}
+            {cardioMode && runsEnabled && isToday && (
               <TouchableOpacity onPress={() => setRunTrackerOpen(true)} activeOpacity={0.8} style={styles.runBtn}>
                 <Ionicons name="navigate" size={14} color={Colors.cardio} />
                 <Text style={styles.runBtnText}>Run</Text>

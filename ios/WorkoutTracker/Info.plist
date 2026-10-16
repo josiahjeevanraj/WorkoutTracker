@@ -74,7 +74,15 @@
 	<false/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app uses your photo library so you can choose a profile picture.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Motion uses your location to track the distance, pace and route of your outdoor runs.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Allow "Always" so Motion can keep tracking your run while your phone is locked or in your pocket.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>This app uses motion data to count your steps and track daily activity.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>
