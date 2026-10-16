@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Animated, Alert, Platform, Modal,
   useWindowDimensions, PanResponder,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors } from '../../constants/colors';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';

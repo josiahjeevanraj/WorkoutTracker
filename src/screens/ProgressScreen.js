@@ -9,7 +9,7 @@ import Svg, {
   Circle, Path, Defs, Stop,
   LinearGradient as SvgGradient,
 } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import { useFeature } from '../contexts/FeatureFlagsContext';

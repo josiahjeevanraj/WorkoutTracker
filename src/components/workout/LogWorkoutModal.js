@@ -3,7 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Modal, KeyboardAvoidingView, Platform, Pressable,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import StorageService from '../../services/StorageService';
 import showAlert from '../../utils/showAlert';
 import ExerciseEditor, { cleanExercises } from './ExerciseEditor';

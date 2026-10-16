@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Polyline } from 'react-native-svg';
 import { subscribeToHeartRate } from '../services/WatchHeartRateService';
 import { Colors } from '../constants/colors';

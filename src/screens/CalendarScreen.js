@@ -4,8 +4,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, Alert, Modal,
 } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from '../lib/gesture';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors } from '../constants/colors';
 import StorageService from '../services/StorageService';
 import ExpandedSessionCard from '../components/workout/ExpandedSessionCard';

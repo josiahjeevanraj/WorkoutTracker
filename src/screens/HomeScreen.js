@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import { weightUnit, kgToDisplay, displayToKg } from '../utils/units';

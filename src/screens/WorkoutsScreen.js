@@ -4,8 +4,8 @@ import {
   View, Text, StyleSheet, SectionList, TouchableOpacity,
 } from 'react-native';
 
-import { Swipeable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from '../lib/gesture';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import StorageService from '../services/StorageService';
 import { Colors } from '../constants/colors';
 import CalendarScreen from './CalendarScreen';

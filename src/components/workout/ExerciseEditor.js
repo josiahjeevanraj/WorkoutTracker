@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { Swipeable } from '../../lib/gesture';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors } from '../../constants/colors';
 import { EXERCISE_LIST, CARDIO_EXERCISES } from '../../constants/exercises';
 import { isCardio, isCardioName, isIntervalCardio, distanceUnitFor, newCardioSet, formatPace, formatCardioSet } from '../../utils/cardio';

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet, useWindowDimensions, unstable_createElement,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors } from '../../constants/colors';
 import { renderSessionStory, renderSessionSticker } from '../../utils/storyImage';
 import { renderRouteSticker, renderRouteAnimation, canRecordVideo } from '../../utils/routeShare';
