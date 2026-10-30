@@ -11,6 +11,9 @@ export const isCardio = ex => ex?.type === 'cardio' || isCardioName(ex?.name);
 const INTERVAL_NAMES = new Set(['treadmill sprint intervals']);
 export const isIntervalCardio = ex => INTERVAL_NAMES.has((ex?.name || '').toLowerCase());
 
+// Only treadmill exercises take an incline
+export const isTreadmill = ex => /treadmill/i.test(ex?.name || '');
+
 // Distance unit that matches the user's weight unit preference
 export const distanceUnitFor = weightUnit => (weightUnit === 'lbs' ? 'mi' : 'km');
 

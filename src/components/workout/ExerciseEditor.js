@@ -4,7 +4,8 @@ import { Swipeable } from '../../lib/gesture';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Colors } from '../../constants/colors';
 import { EXERCISE_LIST, CARDIO_EXERCISES } from '../../constants/exercises';
-import { isCardio, isCardioName, isIntervalCardio, distanceUnitFor, newCardioSet, formatPace, formatCardioSet } from '../../utils/cardio';
+import { isCardio, isCardioName, isIntervalCardio, isTreadmill, distanceUnitFor, newCardioSet, formatPace, formatCardioSet } from '../../utils/cardio';
+import { setLabel, setCountText } from '../../utils/sets';
 import useCustomExercises, { addCustomExercise } from '../../hooks/useCustomExercises';
 import showAlert from '../../utils/showAlert';
 import styles from './workoutStyles';
@@ -24,7 +25,7 @@ const exerciseSummary = (ex, cardio, singleCardio, setsOptional) => {
   const best = sets.reduce((b, st) => ((parseFloat(st.weight) || 0) > (parseFloat(b?.weight) || 0) ? st : b), sets[0]);
   const w = parseFloat(best.weight) || 0;
   const bestText = w || best.reps ? ` · best ${w ? `${best.weight}${best.unit || 'kg'}` : 'BW'}${best.reps ? ` × ${best.reps}` : ''}` : '';
-  return `${sets.length} set${sets.length !== 1 ? 's' : ''}${bestText}`;
+  return `${setCountText(sets)}${bestText}`;
 };
 
 // Swipe actions shared by strength and cardio set rows
@@ -55,9 +56,9 @@ const SetSwipeable = ({ children, exKey, si, canDelete, onDuplicate, onRemove, a
   );
 };
 
-// ─── Cardio entry (single: time + distance + optional incline) ───────────────
+// ─── Cardio entry (single: time + distance + incline on treadmills) ──────────
 
-const CardioEntry = React.memo(({ set, exKey, onUpdate, accent = Colors.text }) => {
+const CardioEntry = React.memo(({ set, exKey, onUpdate, showIncline, accent = Colors.text }) => {
   const unit = set.unit || 'km';
   const minutes = parseFloat(set.duration) || 0;
   const distance = parseFloat(set.distance) || 0;
@@ -99,20 +100,22 @@ const CardioEntry = React.memo(({ set, exKey, onUpdate, accent = Colors.text }) 
             </TouchableOpacity>
           </View>
         </View>
-        <View style={[styles.cardioField, styles.cardioFieldNarrow]}>
-          <Text style={styles.cardioFieldLabel}>INCLINE</Text>
-          <View style={styles.weightInputGroup}>
-            <TextInput
-              style={[styles.inlineSetInput, { flex: 1 }]}
-              value={String(set.incline || '')}
-              onChangeText={v => onUpdate(exKey, 0, 'incline', v)}
-              placeholder="0"
-              placeholderTextColor={Colors.gray}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.cardioUnitText}>%</Text>
+        {showIncline && (
+          <View style={[styles.cardioField, styles.cardioFieldNarrow]}>
+            <Text style={styles.cardioFieldLabel}>INCLINE</Text>
+            <View style={styles.weightInputGroup}>
+              <TextInput
+                style={[styles.inlineSetInput, { flex: 1 }]}
+                value={String(set.incline || '')}
+                onChangeText={v => onUpdate(exKey, 0, 'incline', v)}
+                placeholder="0"
+                placeholderTextColor={Colors.gray}
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.cardioUnitText}>%</Text>
+            </View>
           </View>
-        </View>
+        )}
       </View>
       {minutes > 0 && distance > 0 && (
         <Text style={[styles.cardioPaceText, { color: accent, paddingLeft: 0, paddingBottom: 0, marginTop: 8 }]}>
@@ -123,9 +126,9 @@ const CardioEntry = React.memo(({ set, exKey, onUpdate, accent = Colors.text }) 
   );
 });
 
-// ─── Cardio set row (intervals: time + distance per row) ──────────────────────
+// ─── Cardio set row (intervals: time + distance + treadmill incline per row) ──
 
-const CardioSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDuplicate, onRemove, accent = Colors.text }) => {
+const CardioSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDuplicate, onRemove, showIncline, accent = Colors.text }) => {
   const unit = set.unit || 'km';
   const minutes = parseFloat(set.duration) || 0;
   const distance = parseFloat(set.distance) || 0;
@@ -163,6 +166,19 @@ const CardioSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDuplic
               <Ionicons name="chevron-down" size={10} color={Colors.gray} />
             </TouchableOpacity>
           </View>
+          {showIncline && (
+            <View style={[styles.weightInputGroup, styles.cardioFieldNarrow]}>
+              <TextInput
+                style={[styles.inlineSetInput, { flex: 1 }]}
+                value={String(set.incline || '')}
+                onChangeText={v => onUpdate(exKey, si, 'incline', v)}
+                placeholder="0"
+                placeholderTextColor={Colors.gray}
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.cardioUnitText}>%</Text>
+            </View>
+          )}
         </View>
         {minutes > 0 && distance > 0 && (
           <Text style={[styles.cardioPaceText, { color: accent }]}>Pace {formatPace(minutes / distance)} /{unit}</Text>
@@ -174,7 +190,7 @@ const CardioSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDuplic
 
 // ─── Swipeable set row ────────────────────────────────────────────────────────
 
-const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDuplicate, onRemove, accent = Colors.text }) => {
+const SwipeableSetRow = React.memo(({ set, si, label, exKey, canDelete, onUpdate, onDuplicate, onRemove, accent = Colors.text }) => {
   const unit = set.unit || 'kg';
   return (
     <SetSwipeable exKey={exKey} si={si} canDelete={canDelete} onDuplicate={onDuplicate} onRemove={onRemove} accent={accent}>
@@ -186,7 +202,7 @@ const SwipeableSetRow = React.memo(({ set, si, exKey, canDelete, onUpdate, onDup
         >
           <Text style={[styles.warmupToggleText, set.warmup && styles.warmupToggleTextActive]}>W</Text>
         </TouchableOpacity>
-        <Text style={[styles.inlineSetLabel, set.warmup && { color: Colors.amber }]}>Set {si + 1}</Text>
+        <Text style={[styles.inlineSetLabel, set.warmup && { color: Colors.amber }]}>{label}</Text>
         <View style={styles.weightInputGroup}>
           <TextInput
             style={[styles.inlineSetInput, { flex: 1 }]}
@@ -413,7 +429,7 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
 
             {/* Expanded: the sets (or cardio entry) and the add button */}
             {open && (singleCardio && sets.length > 0 ? (
-              <CardioEntry set={sets[0]} exKey={ex._key} onUpdate={updateSet} accent={accent} />
+              <CardioEntry set={sets[0]} exKey={ex._key} onUpdate={updateSet} showIncline={isTreadmill(ex)} accent={accent} />
             ) : (
               <View style={styles.inlineSetsContainer}>
                 {sets.length > 0 && <Text style={styles.swipeHint}>← swipe for actions →</Text>}
@@ -422,11 +438,13 @@ const ExerciseEditor = ({ exercises, onChange, defaultUnit, mode, setsOptional =
                     key={`${ex._key}-${si}`}
                     set={set}
                     si={si}
+                    label={setLabel(sets, si)}
                     exKey={ex._key}
                     canDelete
                     onUpdate={updateSet}
                     onDuplicate={(exKey, si) => { duplicateSet(exKey, si); onSetAdded?.(); }}
                     onRemove={removeSet}
+                    showIncline={cardio && isTreadmill(ex)}
                     accent={accent}
                   />
                 ))}

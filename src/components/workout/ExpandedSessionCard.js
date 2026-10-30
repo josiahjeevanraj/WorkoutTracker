@@ -10,6 +10,7 @@ import showAlert from '../../utils/showAlert';
 import DayPicker from './DayPicker';
 import StoryShare from './StoryShare';
 import { isCardio, isIntervalCardio, formatCardioSet, distanceUnitFor } from '../../utils/cardio';
+import { setLabel, setCountText } from '../../utils/sets';
 import RunDetails from '../run/RunDetails';
 import styles from './workoutStyles';
 
@@ -178,7 +179,7 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                   <Text style={styles.expandExName}>{ex.name}</Text>
                   {/* Single-entry cardio has no sets to count */}
                   {Array.isArray(ex.sets) && !(isCardio(ex) && !isIntervalCardio(ex)) && (
-                    <Text style={styles.expandExSetCount}>{ex.sets.length} set{ex.sets.length !== 1 ? 's' : ''}</Text>
+                    <Text style={styles.expandExSetCount}>{setCountText(ex.sets)}</Text>
                   )}
                 </View>
                 {(!Array.isArray(ex.sets) || ex.sets.length === 0) && (
@@ -187,14 +188,15 @@ const ExpandedSessionCard = ({ session, rect, onClosed, onEdit, onDeleted, onCop
                 {Array.isArray(ex.sets) && ex.sets.map((set, si) => (
                   <View key={si} style={[styles.expandSetRow, set.warmup && styles.expandWarmupRow]}>
                     <View style={styles.expandSetLabelRow}>
-                      {set.warmup && (
+                      {set.warmup ? (
                         <View style={styles.warmupTag}>
-                          <Text style={styles.warmupTagText}>W</Text>
+                          <Text style={styles.warmupTagText}>WARM-UP</Text>
                         </View>
+                      ) : (
+                        <Text style={styles.expandSetLabel}>
+                          {isCardio(ex) && !isIntervalCardio(ex) ? 'Total' : setLabel(ex.sets, si)}
+                        </Text>
                       )}
-                      <Text style={[styles.expandSetLabel, set.warmup && { color: Colors.amber }]}>
-                        {isCardio(ex) && !isIntervalCardio(ex) ? 'Total' : `Set ${si + 1}`}
-                      </Text>
                     </View>
                     <Text style={styles.expandSetMeta}>
                       {isCardio(ex)
